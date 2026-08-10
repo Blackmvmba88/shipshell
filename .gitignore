@@ -1,0 +1,8 @@
+.env
+.env.*
+!.env.example
+in documents
+.shipshell/
+node_modules/
+dist/
+.DS_Store

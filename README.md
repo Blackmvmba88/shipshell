@@ -60,14 +60,51 @@ ShipShell will integrate proven concepts without modifying or erasing those repo
 
 ## Status
 
-ShipShell is at the foundation stage. The first milestone is a macOS desktop MVP with:
+ShipShell now has a runnable desktop MVP with:
 
-1. a real browser surface
-2. an always-available agent
-3. a visible, resizable terminal
-4. a unified URL and intelligent-search input
-5. a persistent Logbook
-6. permission gates for consequential actions
+1. a native Chromium browser surface with real tabs and configurable Ports
+2. an OpenAI-powered Navigator using the Responses API
+3. a visible terminal restricted to verified read-only maneuvers
+4. a unified URL, question, and fresh-web-search Radar
+5. a persistent local Logbook
+6. ShipSeal permission boundaries for consequential actions
+
+Marketing integrations remain an upcoming milestone. The interface labels missing connections honestly instead of rendering fabricated campaign metrics.
+
+## Quickstart
+
+Requirements: Node.js 20 or newer and an OpenAI API key.
+
+```bash
+npm install
+cp .env.example .env.local
+# Add OPENAI_API_KEY to .env.local
+npm run dev
+```
+
+For the real ShipShell browser, run:
+
+```bash
+npm run desktop:dev
+```
+
+The regular `npm run dev` web surface is retained for UI development, but external sites are never presented as iframes. Real browsing occurs in isolated Electron `WebContentsView` tabs.
+
+Validate the repository:
+
+```bash
+npm run check
+```
+
+## Runtime boundaries
+
+- The API binds to `127.0.0.1` by default.
+- API keys never reach the browser UI or terminal child processes.
+- Terminal commands run without a shell and are checked against a read-only allowlist.
+- Absolute paths, parent traversal, shell operators, redirects, and mutations are blocked.
+- Missions and terminal outcomes are written to `.shipshell/logbook.json`, which is ignored by Git.
+
+Read [the architecture](docs/ARCHITECTURE.md), [the security policy](SECURITY.md), and [the contribution guide](CONTRIBUTING.md).
 
 ## Principles
 
