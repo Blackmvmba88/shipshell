@@ -13,6 +13,7 @@ import { decideMission } from "./decision.js";
 import { resolveTerminalDirectory, resolveWorkspace, reviewCommand } from "./guard.js";
 import { Logbook } from "./logbook.js";
 import { TerminalSealStore } from "./terminal-seal.js";
+import { buildWorkspaceContextBlock, workspaceContextSchema } from "./workspace-context.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
@@ -82,11 +83,12 @@ const missionSchema = z.object({
   input: z.string().trim().min(1).max(4000),
   context: pageContextSchema.optional(),
   profile: copilotProfileSchema.optional(),
+  workspace: workspaceContextSchema.omit({ logbook: true }).optional(),
 });
 
 app.post("/api/missions", async (req, res, next) => {
   try {
-    const { input, context, profile } = missionSchema.parse(req.body);
+    const { input, context, profile, workspace: clientWorkspace } = missionSchema.parse(req.body);
     const decision = decideMission(input);
 
     if (decision.kind === "navigate") {
@@ -94,7 +96,7 @@ app.post("/api/missions", async (req, res, next) => {
         event: "mission",
         status: "planned",
         summary: `Ruta preparada: ${decision.normalizedInput}`,
-        evidence: { decision, universeId: profile?.universeId },
+        evidence: { decision, universeId: profile?.universeId, activeModule: clientWorkspace?.activeModule },
       });
       return res.json({ decision, entry });
     }
@@ -103,14 +105,25 @@ app.post("/api/missions", async (req, res, next) => {
       return res.status(503).json({ error: "OPENAI_API_KEY no está configurada.", decision });
     }
 
+    const recentEntries = clientWorkspace
+      ? (await logbook.list()).slice(-8).map(({ event, status, summary }) => ({ event, status, summary }))
+      : undefined;
+    const semanticWorkspace = clientWorkspace
+      ? { ...clientWorkspace, logbook: recentEntries }
+      : undefined;
     const profileInstruction = buildCopilotProfileInstruction(profile);
+    const userInput = [
+      buildWorkspaceContextBlock(semanticWorkspace),
+      buildMissionInput(decision.normalizedInput, context),
+    ].filter(Boolean).join("\n\n");
+
     const response = await client.responses.create({
       model: process.env.OPENAI_MODEL ?? "gpt-5.6-terra",
       reasoning: { effort: "low" },
       tools: decision.kind === "search" ? [{ type: "web_search" }] : [],
       input: [
         { role: "system", content: [SHIPSHELL_COPILOT_SYSTEM_PROMPT, profileInstruction].filter(Boolean).join("\n\n") },
-        { role: "user", content: buildMissionInput(decision.normalizedInput, context) },
+        { role: "user", content: userInput },
       ],
     });
 
@@ -123,6 +136,9 @@ app.post("/api/missions", async (req, res, next) => {
         kind: decision.kind,
         contextUsed: Boolean(context?.available),
         contextUrl: context?.available ? context.url : undefined,
+        semanticContextUsed: Boolean(semanticWorkspace),
+        activeModule: semanticWorkspace?.activeModule,
+        terminalContextUsed: Boolean(semanticWorkspace?.terminal),
         universeId: profile?.universeId,
         workMode: profile?.workMode,
         voice: profile?.voice,
