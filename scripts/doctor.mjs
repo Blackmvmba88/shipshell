@@ -7,6 +7,7 @@ let failures = 0;
 let warnings = 0;
 
 function ok(message) { console.log(`✓ ${message}`); }
+function info(message) { console.log(`· ${message}`); }
 function fail(message) { failures += 1; console.error(`✗ ${message}`); }
 function warn(message) { warnings += 1; console.warn(`! ${message}`); }
 function read(relative) { return readFileSync(path.join(root, relative), "utf8"); }
@@ -56,6 +57,7 @@ if (process.env.SHIPSHELL_PORT && !/^\d{2,5}$/.test(process.env.SHIPSHELL_PORT))
 else ok("SHIPSHELL_PORT looks valid");
 
 if (process.env.OPENAI_API_KEY) ok("OPENAI_API_KEY configured for this shell");
+else if (process.env.CI) info("OPENAI_API_KEY intentionally absent in CI");
 else warn("OPENAI_API_KEY not set; AI missions will run in local/no-AI mode");
 
 console.log(`\nDoctor result: ${failures} failure(s), ${warnings} warning(s).`);
