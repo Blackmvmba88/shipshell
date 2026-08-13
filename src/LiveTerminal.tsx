@@ -93,6 +93,10 @@ export function LiveTerminal({
     }
   }
 
+  function stopCurrentProcess() {
+    abortRef.current?.abort();
+  }
+
   async function execute(commandToRun: string, sealId?: string) {
     const controller = new AbortController();
     abortRef.current = controller;
@@ -158,7 +162,7 @@ export function LiveTerminal({
     if (event.ctrlKey && event.key.toLowerCase() === "c") {
       if (running && abortRef.current) {
         event.preventDefault();
-        abortRef.current.abort();
+        stopCurrentProcess();
       }
       return;
     }
@@ -226,10 +230,11 @@ export function LiveTerminal({
           aria-label="Comando de terminal"
           autoComplete="off"
           spellCheck={false}
-          disabled={false}
           placeholder="git status, npm run build, cd src…"
         />
-        <button disabled={running || !command.trim()}>{running ? "Ctrl+C" : "Ejecutar"}</button>
+        {running
+          ? <button type="button" className="terminal-stop" onClick={stopCurrentProcess}>Ctrl+C</button>
+          : <button disabled={!command.trim()}>Ejecutar</button>}
       </form>
     </section>
   );
