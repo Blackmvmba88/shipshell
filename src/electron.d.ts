@@ -12,6 +12,15 @@ interface ShipShellBrowserState {
   tabs: ShipShellTab[];
 }
 
+interface ShipShellPageContext {
+  available: boolean;
+  title: string;
+  url: string;
+  selection: string;
+  text: string;
+  error?: string;
+}
+
 interface Window {
   shipShellBrowser?: {
     isNative: true;
@@ -22,6 +31,7 @@ interface Window {
     back(): Promise<unknown>;
     forward(): Promise<unknown>;
     reload(): Promise<unknown>;
+    getPageContext(): Promise<ShipShellPageContext>;
     setBounds(bounds: { x: number; y: number; width: number; height: number }): void;
     setVisible(visible: boolean): void;
     onState(listener: (state: ShipShellBrowserState) => void): () => void;
