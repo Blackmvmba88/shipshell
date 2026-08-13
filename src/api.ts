@@ -22,6 +22,18 @@ export interface MissionVisualContext {
   error?: string;
 }
 
+export interface MissionVisualAnchor {
+  id: string;
+  kind: "underline" | "circle" | "glow";
+  text: string;
+  tag: string;
+  role: string;
+  ariaLabel: string;
+  href: string;
+  rect: { x: number; y: number; width: number; height: number };
+  createdAt: string;
+}
+
 export interface MissionContext {
   available: boolean;
   title: string;
@@ -29,6 +41,7 @@ export interface MissionContext {
   selection: string;
   text: string;
   error?: string;
+  anchors?: MissionVisualAnchor[];
   visual?: MissionVisualContext;
 }
 
