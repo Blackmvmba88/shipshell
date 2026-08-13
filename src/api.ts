@@ -1,3 +1,5 @@
+import { buildClientWorkspaceContext } from "./semantic-context";
+
 export interface Health {
   ok: boolean;
   system: string;
@@ -132,7 +134,7 @@ export const api = {
   logbook: () => request<{ entries: LogEntry[] }>("/api/logbook"),
   mission: (input: string, context?: MissionContext, profile?: MissionProfile, workspace?: WorkspaceContext) => request<{ decision: { kind: string; normalizedInput: string }; answer?: string }>("/api/missions", {
     method: "POST",
-    body: JSON.stringify({ input, context, profile, workspace }),
+    body: JSON.stringify({ input, context, profile, workspace: workspace ?? buildClientWorkspaceContext() }),
   }),
   terminalState: (sessionId: string) => request<{ cwd: string }>(`/api/terminal/state?sessionId=${encodeURIComponent(sessionId)}`),
   previewCommand: (sessionId: string, command: string) => request<TerminalPreview>("/api/terminal/preview", {
