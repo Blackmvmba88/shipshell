@@ -7,6 +7,7 @@ import express from "express";
 import OpenAI from "openai";
 import { z } from "zod";
 import { buildMissionInput, pageContextSchema, SHIPSHELL_COPILOT_SYSTEM_PROMPT } from "./browser-context.js";
+import { buildCopilotProfileInstruction, copilotProfileSchema } from "./copilot-profile.js";
 import { decideMission } from "./decision.js";
 import { resolveWorkspace, reviewCommand } from "./guard.js";
 import { Logbook } from "./logbook.js";
@@ -46,11 +47,12 @@ app.get("/api/logbook", async (_req, res, next) => {
 const missionSchema = z.object({
   input: z.string().trim().min(1).max(4000),
   context: pageContextSchema.optional(),
+  profile: copilotProfileSchema.optional(),
 });
 
 app.post("/api/missions", async (req, res, next) => {
   try {
-    const { input, context } = missionSchema.parse(req.body);
+    const { input, context, profile } = missionSchema.parse(req.body);
     const decision = decideMission(input);
 
     if (decision.kind === "navigate") {
@@ -58,7 +60,7 @@ app.post("/api/missions", async (req, res, next) => {
         event: "mission",
         status: "planned",
         summary: `Ruta preparada: ${decision.normalizedInput}`,
-        evidence: { decision },
+        evidence: { decision, universeId: profile?.universeId },
       });
       return res.json({ decision, entry });
     }
@@ -67,12 +69,13 @@ app.post("/api/missions", async (req, res, next) => {
       return res.status(503).json({ error: "OPENAI_API_KEY no está configurada.", decision });
     }
 
+    const profileInstruction = buildCopilotProfileInstruction(profile);
     const response = await client.responses.create({
       model: process.env.OPENAI_MODEL ?? "gpt-5.6-terra",
       reasoning: { effort: "low" },
       tools: decision.kind === "search" ? [{ type: "web_search" }] : [],
       input: [
-        { role: "system", content: SHIPSHELL_COPILOT_SYSTEM_PROMPT },
+        { role: "system", content: [SHIPSHELL_COPILOT_SYSTEM_PROMPT, profileInstruction].filter(Boolean).join("\n\n") },
         { role: "user", content: buildMissionInput(decision.normalizedInput, context) },
       ],
     });
@@ -86,6 +89,9 @@ app.post("/api/missions", async (req, res, next) => {
         kind: decision.kind,
         contextUsed: Boolean(context?.available),
         contextUrl: context?.available ? context.url : undefined,
+        universeId: profile?.universeId,
+        workMode: profile?.workMode,
+        voice: profile?.voice,
       },
     });
     return res.json({ decision, answer: response.output_text, responseId: response.id, entry });
