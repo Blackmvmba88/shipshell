@@ -22,6 +22,11 @@ interface ShipShellVisualAnchor {
   role: string;
   ariaLabel: string;
   href: string;
+  elementId?: string;
+  testId?: string;
+  name?: string;
+  note?: string;
+  resolved?: boolean;
   rect: { x: number; y: number; width: number; height: number };
   createdAt: string;
 }
@@ -57,6 +62,8 @@ interface Window {
     setAnnotationMode(mode: ShipShellAnnotationMode): Promise<{ mode: ShipShellAnnotationMode; anchors: ShipShellVisualAnchor[] }>;
     clearAnnotations(): Promise<ShipShellVisualAnchor[]>;
     getAnnotations(): Promise<ShipShellVisualAnchor[]>;
+    setAnnotationNote(number: number, note: string): Promise<ShipShellVisualAnchor[]>;
+    focusAnnotations(numbers: number[]): Promise<{ focused: number[]; anchors: ShipShellVisualAnchor[] }>;
     setBounds(bounds: { x: number; y: number; width: number; height: number }): void;
     setVisible(visible: boolean): void;
     onState(listener: (state: ShipShellBrowserState) => void): () => void;
