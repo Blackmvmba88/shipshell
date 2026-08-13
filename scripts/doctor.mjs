@@ -1,4 +1,5 @@
 import { readFileSync, existsSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 
@@ -22,6 +23,7 @@ for (const file of [
   "index.html",
   "electron/main.mjs",
   "electron/preload.cjs",
+  "electron/visual-anchors.mjs",
   "server/index.ts",
   "server/browser-context.ts",
   "server/browser-context.test.ts",
@@ -48,6 +50,12 @@ for (const file of [
   ".github/workflows/ci.yml",
 ]) {
   if (existsSync(path.join(root, file))) ok(`${file} present`); else fail(`${file} missing`);
+}
+
+for (const file of ["electron/main.mjs", "electron/preload.cjs", "electron/visual-anchors.mjs"]) {
+  const result = spawnSync(process.execPath, ["--check", path.join(root, file)], { encoding: "utf8" });
+  if (result.status === 0) ok(`${file} syntax valid`);
+  else fail(`${file} syntax invalid: ${(result.stderr || result.stdout || "unknown syntax error").trim().slice(0, 300)}`);
 }
 
 const pkg = JSON.parse(read("package.json"));
@@ -108,9 +116,11 @@ const terminalSeal = read("server/terminal-seal.ts");
 const liveTerminal = read("src/LiveTerminal.tsx");
 const main = read("electron/main.mjs");
 const preload = read("electron/preload.cjs");
+const visualAnchors = read("electron/visual-anchors.mjs");
 if (server.includes("buildWorkspaceContextBlock") && server.includes("semanticContextUsed") && server.includes("terminalContextUsed")) ok("server feeds and records semantic workspace context"); else fail("server semantic context wiring missing");
 if (server.includes("buildMissionContent") && server.includes("visualContextUsed") && server.includes('express.json({ limit: "1mb" })')) ok("server accepts bounded visual context and records vision usage"); else fail("server automatic vision wiring missing");
 if (main.includes("capturePage") && main.includes("targetBytes = 350_000") && main.includes("browser:set-annotation-mode") && main.includes("readVisualAnchors")) ok("electron captures bounded page vision and manages semantic visual anchors"); else fail("electron page vision or visual anchors wiring missing");
+if (visualAnchors.includes("annotationClient") && visualAnchors.includes("exportAnchors") && visualAnchors.includes("ss-glow")) ok("visual anchor runtime is isolated and serializable"); else fail("visual anchor runtime is incomplete");
 if (preload.includes("setAnnotationMode") && preload.includes("clearAnnotations") && preload.includes("getAnnotations")) ok("preload exposes narrow visual-anchor controls"); else fail("visual-anchor preload bridge missing");
 if (liveTerminal.includes("publishTerminalContext") && liveTerminal.includes("output.slice(-8000)")) ok("terminal publishes bounded live semantic state"); else fail("terminal semantic publisher missing");
 if (server.includes("/api/terminal/run-stream") && server.includes("application/x-ndjson")) ok("live terminal streams process output"); else fail("live terminal streaming route missing");
