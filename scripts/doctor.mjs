@@ -25,7 +25,10 @@ for (const file of [
   "electron/preload.cjs",
   "server/index.ts",
   "server/copilot-profile.ts",
+  "server/terminal-seal.ts",
   "src/App.tsx",
+  "src/LiveTerminal.tsx",
+  "src/terminal.css",
   "src/universes.ts",
   "src/universes.css",
   ".github/workflows/ci.yml",
@@ -46,9 +49,8 @@ const html = read("index.html");
 if (html.includes("default-src 'self'") && html.includes("object-src 'none'") && html.includes("frame-src 'none'")) ok("deck CSP baseline present");
 else fail("deck CSP baseline is incomplete");
 
-const styles = read("src/styles.css");
-const universeStyles = read("src/universes.css");
-if (!/https?:\/\//i.test(styles) && !/https?:\/\//i.test(universeStyles)) ok("stylesheets have no remote asset dependency");
+const styles = [read("src/styles.css"), read("src/universes.css"), read("src/terminal.css")].join("\n");
+if (!/https?:\/\//i.test(styles)) ok("stylesheets have no remote asset dependency");
 else warn("a stylesheet references a remote asset; prefer local/system assets under the current CSP");
 
 const universes = read("src/universes.ts");
@@ -66,6 +68,23 @@ for (const voice of ["quiet", "technical", "creative", "explorer", "executive", 
 }
 if (profile.includes("nunca cambia las reglas de seguridad") && profile.includes("ShipSeal")) ok("voice profiles preserve ShipSeal boundary");
 else fail("voice profiles must explicitly preserve ShipSeal safety boundary");
+
+const server = read("server/index.ts");
+const guard = read("server/guard.ts");
+const terminalSeal = read("server/terminal-seal.ts");
+const liveTerminal = read("src/LiveTerminal.tsx");
+if (server.includes("/api/terminal/run-stream") && server.includes("application/x-ndjson")) ok("live terminal streams process output");
+else fail("live terminal streaming route missing");
+if (server.includes("let terminalCwd = workspace") && server.includes("resolveTerminalDirectory")) ok("terminal cwd is session-aware and workspace-bounded");
+else fail("terminal cwd boundary missing");
+if (terminalSeal.includes("approved: false") && terminalSeal.includes("ticket.used = true") && terminalSeal.includes("ttlMs = 60_000")) ok("terminal ShipSeal is explicit, expiring, and single-use");
+else fail("terminal ShipSeal must be explicit, expiring, and single-use");
+if (guard.includes("shell") && guard.includes("BLOCKED_EXECUTABLES") && guard.includes("requiresSeal: true")) ok("terminal policy separates direct, sealed, and blocked maneuvers");
+else fail("terminal risk policy is incomplete");
+if (server.includes("shell: false") && server.includes("OPENAI_API_KEY: undefined")) ok("terminal child processes avoid shell expansion and secret inheritance");
+else fail("terminal process isolation needs review");
+if (liveTerminal.includes("Sellar y ejecutar") && liveTerminal.includes("runCommandStream")) ok("terminal UI exposes explicit ShipSeal and live output");
+else fail("terminal UI is not wired to live ShipSeal flow");
 
 const gitignore = read(".gitignore");
 if (gitignore.includes(".env") && gitignore.includes(".shipshell/")) ok("secrets and runtime state are ignored");
