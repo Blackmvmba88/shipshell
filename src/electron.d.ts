@@ -12,6 +12,12 @@ interface ShipShellBrowserState {
   tabs: ShipShellTab[];
 }
 
+interface ShipShellVisualContext {
+  available: boolean;
+  imageDataUrl: string;
+  error?: string;
+}
+
 interface ShipShellPageContext {
   available: boolean;
   title: string;
@@ -19,6 +25,7 @@ interface ShipShellPageContext {
   selection: string;
   text: string;
   error?: string;
+  visual?: ShipShellVisualContext;
 }
 
 interface Window {
