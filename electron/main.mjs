@@ -124,16 +124,19 @@ async function readActivePageContext() {
   const title = contents.getTitle() || "";
   const url = contents.getURL() || "";
   try {
-    const snapshot = await contents.executeJavaScript(`(() => ({
-      selection: String(window.getSelection?.()?.toString?.() || ""),
-      text: String(document.body?.innerText || "")
-    }))()`, true);
+    const snapshot = await contents.executeJavaScript(`(() => {
+      const selection = String(window.getSelection?.()?.toString?.() || "").trim().slice(0, 4000);
+      const text = selection
+        ? ""
+        : String(document.body?.innerText || "").replace(/\\s+/g, " ").trim().slice(0, 16000);
+      return { selection, text };
+    })()`, true);
     return {
       available: true,
       title: title.slice(0, 500),
       url: url.slice(0, 4000),
-      selection: String(snapshot?.selection || "").trim().slice(0, 4000),
-      text: String(snapshot?.text || "").replace(/\s+/g, " ").trim().slice(0, 16000),
+      selection: String(snapshot?.selection || ""),
+      text: String(snapshot?.text || ""),
     };
   } catch (error) {
     return {
