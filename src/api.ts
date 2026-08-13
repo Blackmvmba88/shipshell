@@ -69,11 +69,18 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   return data as T;
 }
 
-async function runCommandStream(command: string, sealId: string | undefined, onEvent: (event: TerminalStreamEvent) => void) {
+async function runCommandStream(
+  sessionId: string,
+  command: string,
+  sealId: string | undefined,
+  onEvent: (event: TerminalStreamEvent) => void,
+  signal?: AbortSignal,
+) {
   const response = await fetch("/api/terminal/run-stream", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ command, sealId }),
+    body: JSON.stringify({ sessionId, command, sealId }),
+    signal,
   });
   if (!response.ok) {
     const data = await response.json().catch(() => ({ error: "La maniobra falló" }));
@@ -108,14 +115,14 @@ export const api = {
     method: "POST",
     body: JSON.stringify({ input, context, profile }),
   }),
-  terminalState: () => request<{ cwd: string }>("/api/terminal/state"),
-  previewCommand: (command: string) => request<TerminalPreview>("/api/terminal/preview", {
+  terminalState: (sessionId: string) => request<{ cwd: string }>(`/api/terminal/state?sessionId=${encodeURIComponent(sessionId)}`),
+  previewCommand: (sessionId: string, command: string) => request<TerminalPreview>("/api/terminal/preview", {
     method: "POST",
-    body: JSON.stringify({ command }),
+    body: JSON.stringify({ sessionId, command }),
   }),
-  approveCommand: (approval: TerminalApproval) => request<{ ok: boolean }>("/api/terminal/approve", {
+  approveCommand: (sessionId: string, approval: TerminalApproval) => request<{ ok: boolean }>("/api/terminal/approve", {
     method: "POST",
-    body: JSON.stringify({ id: approval.id, fingerprint: approval.fingerprint }),
+    body: JSON.stringify({ sessionId, id: approval.id, fingerprint: approval.fingerprint }),
   }),
   runCommandStream,
 };
