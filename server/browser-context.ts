@@ -1,9 +1,14 @@
 import { z } from "zod";
 
+const JPEG_DATA_URL_PREFIX = "data:image/jpeg;base64,";
+
 export const visualContextSchema = z.object({
   available: z.boolean(),
   imageDataUrl: z.string().max(650_000).refine(
-    (value) => value === "" || /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(value),
+    (value) => value === "" || (
+      value.startsWith(JPEG_DATA_URL_PREFIX)
+      && /^[A-Za-z0-9+/=]+$/.test(value.slice(JPEG_DATA_URL_PREFIX.length))
+    ),
     "visual context must be a JPEG data URL",
   ),
   error: z.string().max(500).optional(),
