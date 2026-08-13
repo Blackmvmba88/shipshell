@@ -1,5 +1,5 @@
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
-import { Activity, ShieldCheck, TerminalSquare, X } from "lucide-react";
+import { Activity, Maximize2, ShieldCheck, TerminalSquare, X } from "lucide-react";
 import { api, type TerminalPreview, type TerminalStreamEvent } from "./api";
 import "./terminal.css";
 
@@ -21,10 +21,12 @@ export function LiveTerminal({
   workspace,
   focused = false,
   onSelect,
+  onExpand,
 }: {
   workspace?: string;
   focused?: boolean;
   onSelect?: () => void;
+  onExpand?: () => void;
 }) {
   const sessionId = useRef(window.crypto.randomUUID());
   const abortRef = useRef<AbortController | null>(null);
@@ -199,10 +201,16 @@ export function LiveTerminal({
   const terminalStatus = running ? "EJECUTANDO" : preview ? "SHIPSEAL PENDIENTE" : "VIVA";
 
   return (
-    <section className={`terminal-panel live-terminal ${focused ? "module-selected" : ""}`} onMouseDown={onSelect} data-module="terminal">
+    <section
+      className={`terminal-panel live-terminal ${focused ? "module-selected" : ""}`}
+      onMouseDown={onSelect}
+      onDoubleClick={onExpand}
+      data-module="terminal"
+    >
       <div className="terminal-title">
         <TerminalSquare size={15} />
         <span>TERMINAL // {workspace ?? "conectando"} // {cwd}</span>
+        <button className="module-expand terminal-expand" type="button" onClick={(event) => { event.stopPropagation(); onExpand?.(); }} title="Expandir terminal"><Maximize2 size={13} /></button>
         <span className={running ? "terminal-live running" : "terminal-live"}>{running && <Activity className="spin" size={12} />}{terminalStatus}</span>
       </div>
 
