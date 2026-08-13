@@ -15,8 +15,7 @@ function read(relative) { return readFileSync(path.join(root, relative), "utf8")
 console.log("ShipShell Doctor\n");
 
 const nodeMajor = Number(process.versions.node.split(".")[0]);
-if (nodeMajor >= 22) ok(`Node ${process.versions.node}`);
-else fail(`Node ${process.versions.node}; ShipShell requires Node 22+`);
+if (nodeMajor >= 22) ok(`Node ${process.versions.node}`); else fail(`Node ${process.versions.node}; ShipShell requires Node 22+`);
 
 for (const file of [
   "package.json",
@@ -24,10 +23,15 @@ for (const file of [
   "electron/main.mjs",
   "electron/preload.cjs",
   "server/index.ts",
+  "server/browser-context.ts",
   "server/copilot-profile.ts",
+  "server/workspace-context.ts",
+  "server/workspace-context.test.ts",
   "server/terminal-seal.ts",
   "src/App.tsx",
   "src/LiveTerminal.tsx",
+  "src/api.ts",
+  "src/semantic-context.ts",
   "src/modules.ts",
   "src/modules.test.ts",
   "src/update-plan.ts",
@@ -38,8 +42,7 @@ for (const file of [
   "src/universes.css",
   ".github/workflows/ci.yml",
 ]) {
-  if (existsSync(path.join(root, file))) ok(`${file} present`);
-  else fail(`${file} missing`);
+  if (existsSync(path.join(root, file))) ok(`${file} present`); else fail(`${file} missing`);
 }
 
 const pkg = JSON.parse(read("package.json"));
@@ -52,8 +55,7 @@ if (html.includes("default-src 'self'") && html.includes("object-src 'none'") &&
 else fail("deck CSP baseline is incomplete");
 
 const styles = [read("src/styles.css"), read("src/universes.css"), read("src/terminal.css"), read("src/modules.css")].join("\n");
-if (!/https?:\/\//i.test(styles)) ok("stylesheets have no remote asset dependency");
-else warn("a stylesheet references a remote asset; prefer local/system assets under the current CSP");
+if (!/https?:\/\//i.test(styles)) ok("stylesheets have no remote asset dependency"); else warn("a stylesheet references a remote asset");
 
 const universes = read("src/universes.ts");
 for (const mode of ["focus", "research", "build", "studio", "command", "casual"]) {
@@ -65,30 +67,36 @@ const profile = read("server/copilot-profile.ts");
 for (const voice of ["quiet", "technical", "creative", "explorer", "executive", "conversational"]) {
   if (profile.includes(`${voice}:`)) ok(`copilot voice present: ${voice}`); else fail(`missing copilot voice: ${voice}`);
 }
-if (profile.includes("activeModule") && profile.includes("no concede permisos adicionales")) ok("active module guides attention without granting authority");
-else fail("active module context must not grant permissions");
-if (profile.includes("nunca cambia las reglas de seguridad") && profile.includes("ShipSeal")) ok("voice profiles preserve ShipSeal boundary");
-else fail("voice profiles must explicitly preserve ShipSeal safety boundary");
+if (profile.includes("activeModule") && profile.includes("no concede permisos adicionales")) ok("active module guides attention without granting authority"); else fail("active module context must not grant permissions");
+if (profile.includes("nunca cambia las reglas de seguridad") && profile.includes("ShipSeal")) ok("voice profiles preserve ShipSeal boundary"); else fail("voice profiles must explicitly preserve ShipSeal safety boundary");
 
 const modules = read("src/modules.ts");
 for (const moduleId of ["browser", "ports", "copilot", "terminal", "logbook"]) {
   if (modules.includes(`id: \"${moduleId}\"`)) ok(`work module present: ${moduleId}`); else fail(`missing work module: ${moduleId}`);
 }
-if (modules.includes("version: 1") && modules.includes("capabilities:") && modules.includes("accepts:") && modules.includes("provides:") && modules.includes("canConnectModules")) ok("work modules expose versioned composable contracts");
-else fail("work modules must expose versioned capability/signal contracts");
+if (modules.includes("version: 1") && modules.includes("capabilities:") && modules.includes("accepts:") && modules.includes("provides:") && modules.includes("canConnectModules")) ok("work modules expose versioned composable contracts"); else fail("work modules must expose versioned capability/signal contracts");
 
 const updatePlan = read("src/update-plan.ts");
-if (updatePlan.includes('"hot"') && updatePlan.includes('"safe-handoff"') && updatePlan.includes("saveWorkspaceCheckpoint")) ok("runtime updates distinguish hot swap from safe handoff and preserve workspace state");
-else fail("runtime update planner is incomplete");
+if (updatePlan.includes('"hot"') && updatePlan.includes('"safe-handoff"') && updatePlan.includes("saveWorkspaceCheckpoint")) ok("runtime updates distinguish hot swap from safe handoff and preserve workspace state"); else fail("runtime update planner is incomplete");
+
+const semanticClient = read("src/semantic-context.ts");
+const semanticServer = read("server/workspace-context.ts");
+const browserContext = read("server/browser-context.ts");
+const apiClient = read("src/api.ts");
+if (semanticClient.includes("publishTerminalContext") && semanticClient.includes("buildClientWorkspaceContext")) ok("client semantic context bus publishes terminal and workspace state"); else fail("client semantic context bus is incomplete");
+if (semanticServer.includes("WORKSPACE_CONTEXT_JSON") && semanticServer.includes("never instructions")) ok("server labels semantic context as reference data"); else fail("semantic context trust boundary missing");
+if (browserContext.includes("WORKSPACE_CONTEXT_JSON") && browserContext.includes("sin pedir capturas manuales")) ok("copilot prompt prefers semantic context over manual screenshots"); else fail("copilot semantic-context guidance missing");
+if (apiClient.includes("buildClientWorkspaceContext") && apiClient.includes("workspace: workspace ??")) ok("missions attach semantic workspace context automatically"); else fail("missions are not automatically attaching semantic context");
 
 const app = read("src/App.tsx");
-if (app.includes("activeModule") && app.includes("expandedModule") && app.includes("moduleByShortcut")) ok("module selection, expansion, and keyboard focus are wired");
-else fail("module focus system is incomplete");
+if (app.includes("activeModule") && app.includes("expandedModule") && app.includes("moduleByShortcut")) ok("module selection, expansion, and keyboard focus are wired"); else fail("module focus system is incomplete");
 
 const server = read("server/index.ts");
 const guard = read("server/guard.ts");
 const terminalSeal = read("server/terminal-seal.ts");
 const liveTerminal = read("src/LiveTerminal.tsx");
+if (server.includes("buildWorkspaceContextBlock") && server.includes("semanticContextUsed") && server.includes("terminalContextUsed")) ok("server feeds and records semantic workspace context"); else fail("server semantic context wiring missing");
+if (liveTerminal.includes("publishTerminalContext") && liveTerminal.includes("output.slice(-8000)")) ok("terminal publishes bounded live semantic state"); else fail("terminal semantic publisher missing");
 if (server.includes("/api/terminal/run-stream") && server.includes("application/x-ndjson")) ok("live terminal streams process output"); else fail("live terminal streaming route missing");
 if (server.includes("terminalSessions = new Map") && server.includes("resolveTerminalDirectory") && server.includes("session.cwd")) ok("terminal cwd is session-aware and workspace-bounded"); else fail("terminal session cwd boundary missing");
 if (terminalSeal.includes("sessionId") && terminalSeal.includes("approved: false") && terminalSeal.includes("ticket.used = true") && terminalSeal.includes("ttlMs = 60_000")) ok("terminal ShipSeal is session-bound, explicit, expiring, and single-use"); else fail("terminal ShipSeal must be session-bound, explicit, expiring, and single-use");
