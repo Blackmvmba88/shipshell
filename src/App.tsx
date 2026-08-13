@@ -26,6 +26,7 @@ import {
 import { api, type Health, type LogEntry } from "./api";
 import { LiveTerminal } from "./LiveTerminal";
 import { moduleByShortcut, SHIP_MODULES, type ShipModuleId } from "./modules";
+import { readWorkspaceCheckpoint, saveWorkspaceCheckpoint } from "./update-plan";
 import { applyUniverse, readStoredUniverse, UNIVERSES, type Universe } from "./universes";
 import "./copilot.css";
 import "./universes.css";
@@ -46,20 +47,46 @@ const QUICK_COPILOT_PROMPTS = [
   "Explícame lo que estoy viendo",
 ] as const;
 
+type DeckId = "browser" | "marketing" | "logbook";
+
+function isModuleId(value: string | null | undefined): value is ShipModuleId {
+  return SHIP_MODULES.some((module) => module.id === value);
+}
+
+function isDeckId(value: string | undefined): value is DeckId {
+  return value === "browser" || value === "marketing" || value === "logbook";
+}
+
+function restoreWorkspace() {
+  const checkpoint = readWorkspaceCheckpoint();
+  const storedUniverse = readStoredUniverse();
+  const universe = checkpoint
+    ? UNIVERSES.find((candidate) => candidate.id === checkpoint.universeId) ?? storedUniverse
+    : storedUniverse;
+  return {
+    universe,
+    activeModule: isModuleId(checkpoint?.activeModule) ? checkpoint.activeModule : "browser" as ShipModuleId,
+    expandedModule: isModuleId(checkpoint?.expandedModule) ? checkpoint.expandedModule : null,
+    activeDeck: isDeckId(checkpoint?.activeDeck) ? checkpoint.activeDeck : "browser" as DeckId,
+    url: checkpoint?.url || "shipshell://home",
+  };
+}
+
 function App() {
+  const [boot] = useState(() => restoreWorkspace());
   const [health, setHealth] = useState<Health | null>(null);
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [input, setInput] = useState("");
   const [copilotInput, setCopilotInput] = useState("");
   const [answer, setAnswer] = useState("Voy contigo. Abre una página y pregúntame lo que quieras sobre ella.");
-  const [url, setUrl] = useState("shipshell://home");
+  const [url, setUrl] = useState(boot.url);
   const [busy, setBusy] = useState(false);
   const [contextEnabled, setContextEnabled] = useState(true);
   const [pageContext, setPageContext] = useState<ShipShellPageContext | null>(null);
-  const [universe, setUniverse] = useState<Universe>(() => readStoredUniverse());
-  const [activeModule, setActiveModule] = useState<ShipModuleId>("browser");
-  const [expandedModule, setExpandedModule] = useState<ShipModuleId | null>(null);
-  const [activeDeck, setActiveDeck] = useState<"browser" | "marketing" | "logbook">("browser");
+  const [universe, setUniverse] = useState<Universe>(boot.universe);
+  const [activeModule, setActiveModule] = useState<ShipModuleId>(boot.activeModule);
+  const [expandedModule, setExpandedModule] = useState<ShipModuleId | null>(boot.expandedModule);
+  const [activeDeck, setActiveDeck] = useState<DeckId>(boot.activeDeck);
   const [browserState, setBrowserState] = useState<ShipShellBrowserState>({ activeTabId: null, tabs: [] });
   const [browserSlot, setBrowserSlot] = useState<HTMLDivElement | null>(null);
   const nativeBrowser = window.shipShellBrowser;
@@ -80,6 +107,16 @@ function App() {
   useEffect(() => { applyUniverse(universe); }, [universe]);
   useEffect(() => nativeBrowser?.onState(setBrowserState), [nativeBrowser]);
   useEffect(() => { setPageContext(null); }, [browserState.activeTabId]);
+
+  useEffect(() => {
+    saveWorkspaceCheckpoint({
+      activeModule,
+      expandedModule,
+      universeId: universe.id,
+      activeDeck,
+      url: activeTab?.url ?? url,
+    });
+  }, [activeModule, expandedModule, universe.id, activeDeck, activeTab?.url, url]);
 
   useEffect(() => {
     const handleModuleShortcut = (event: KeyboardEvent) => {
@@ -113,6 +150,7 @@ function App() {
 
   function selectModule(module: ShipModuleId) {
     setActiveModule(module);
+    setExpandedModule((current) => current && current !== module ? null : current);
     if (module === "browser" || module === "ports") setActiveDeck("browser");
     if (module === "logbook") setActiveDeck("logbook");
   }
@@ -144,6 +182,7 @@ function App() {
         setUrl(result.decision.normalizedInput);
         setActiveDeck("browser");
         setActiveModule("browser");
+        setExpandedModule(null);
         await nativeBrowser?.navigate(result.decision.normalizedInput);
         setAnswer(`Ruta preparada: ${result.decision.normalizedInput}`);
       } else {
@@ -176,6 +215,7 @@ function App() {
     setUrl(href);
     setActiveDeck("browser");
     setActiveModule("browser");
+    setExpandedModule(null);
     if (nativeBrowser) nativeBrowser.navigate(href);
   }
 
@@ -280,7 +320,12 @@ function App() {
           <div className="mission-stats"><div><span>MISIONES</span><strong>{entries.filter((e) => e.event === "mission").length}</strong></div><div><span>BLOQUEOS</span><strong>{entries.filter((e) => e.status === "blocked").length}</strong></div></div>
         </aside>
 
-        <LiveTerminal workspace={health?.workspace} focused={activeModule === "terminal"} onSelect={() => setActiveModule("terminal")} />
+        <LiveTerminal
+          workspace={health?.workspace}
+          focused={activeModule === "terminal"}
+          onSelect={() => selectModule("terminal")}
+          onExpand={() => toggleModule("terminal")}
+        />
       </main>
     </div>
   );
