@@ -9,7 +9,7 @@ contextBridge.exposeInMainWorld("shipShellBrowser", {
   back: () => ipcRenderer.invoke("browser:back"),
   forward: () => ipcRenderer.invoke("browser:forward"),
   reload: () => ipcRenderer.invoke("browser:reload"),
-  getPageContext: () => ipcRenderer.invoke("browser:get-context"),
+  getPageContext: () => ipcRenderer.invoke("browser:get-context", { includeVisual: true }),
   setBounds: (bounds) => ipcRenderer.send("browser:set-bounds", bounds),
   setVisible: (visible) => ipcRenderer.send("browser:set-visible", visible),
   onState: (listener) => {
