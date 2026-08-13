@@ -115,6 +115,46 @@ function activeContents() {
   return activeTabId ? tabs.get(activeTabId)?.view.webContents : undefined;
 }
 
+async function captureActivePageVisual(contents) {
+  try {
+    const image = await contents.capturePage();
+    const size = image.getSize();
+    if (!size.width || !size.height) {
+      return { available: false, imageDataUrl: "", error: "La pestaña no produjo un frame visible." };
+    }
+
+    const scale = Math.min(1, 1280 / size.width, 900 / size.height);
+    const resized = scale < 1
+      ? image.resize({ width: Math.max(1, Math.round(size.width * scale)), height: Math.max(1, Math.round(size.height * scale)) })
+      : image;
+    let jpeg = resized.toJPEG(55);
+
+    if (jpeg.length > 900_000) {
+      const smallerSize = resized.getSize();
+      const smaller = resized.resize({
+        width: Math.max(1, Math.round(smallerSize.width * 0.72)),
+        height: Math.max(1, Math.round(smallerSize.height * 0.72)),
+      });
+      jpeg = smaller.toJPEG(48);
+    }
+
+    if (jpeg.length > 1_100_000) {
+      return { available: false, imageDataUrl: "", error: "El frame visual excedió el límite local de ShipShell." };
+    }
+
+    return {
+      available: true,
+      imageDataUrl: `data:image/jpeg;base64,${jpeg.toString("base64")}`,
+    };
+  } catch (error) {
+    return {
+      available: false,
+      imageDataUrl: "",
+      error: error instanceof Error ? error.message.slice(0, 500) : "No se pudo capturar el frame visual.",
+    };
+  }
+}
+
 async function readActivePageContext() {
   const contents = activeContents();
   if (!contents || contents.isDestroyed()) {
@@ -123,6 +163,8 @@ async function readActivePageContext() {
 
   const title = contents.getTitle() || "";
   const url = contents.getURL() || "";
+  let semantic = { selection: "", text: "", error: undefined };
+
   try {
     const snapshot = await contents.executeJavaScript(`(() => {
       const selection = String(window.getSelection?.()?.toString?.() || "").trim().slice(0, 4000);
@@ -131,23 +173,29 @@ async function readActivePageContext() {
         : String(document.body?.innerText || "").replace(/\\s+/g, " ").trim().slice(0, 16000);
       return { selection, text };
     })()`, true);
-    return {
-      available: true,
-      title: title.slice(0, 500),
-      url: url.slice(0, 4000),
+    semantic = {
       selection: String(snapshot?.selection || ""),
       text: String(snapshot?.text || ""),
+      error: undefined,
     };
   } catch (error) {
-    return {
-      available: true,
-      title: title.slice(0, 500),
-      url: url.slice(0, 4000),
+    semantic = {
       selection: "",
       text: "",
       error: error instanceof Error ? error.message.slice(0, 500) : "No se pudo leer el contenido visible.",
     };
   }
+
+  const visual = await captureActivePageVisual(contents);
+  return {
+    available: true,
+    title: title.slice(0, 500),
+    url: url.slice(0, 4000),
+    selection: semantic.selection,
+    text: semantic.text,
+    error: semantic.error,
+    visual,
+  };
 }
 
 function registerIpc() {
