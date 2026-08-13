@@ -12,6 +12,7 @@ import { buildCopilotProfileInstruction, copilotProfileSchema } from "./copilot-
 import { decideMission } from "./decision.js";
 import { resolveTerminalDirectory, resolveWorkspace, reviewCommand } from "./guard.js";
 import { Logbook } from "./logbook.js";
+import { buildMissionContent } from "./mission-content.js";
 import { TerminalSealStore } from "./terminal-seal.js";
 import { buildWorkspaceContextBlock, workspaceContextSchema } from "./workspace-context.js";
 
@@ -29,7 +30,7 @@ const terminalSessions = new Map<string, { cwd: string; touchedAt: number }>();
 const client = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 
 app.use(cors({ origin: ["http://127.0.0.1:5173", "http://localhost:5173"] }));
-app.use(express.json({ limit: "64kb" }));
+app.use(express.json({ limit: "1mb" }));
 
 function pruneTerminalSessions() {
   const cutoff = Date.now() - 4 * 60 * 60_000;
@@ -123,7 +124,7 @@ app.post("/api/missions", async (req, res, next) => {
       tools: decision.kind === "search" ? [{ type: "web_search" }] : [],
       input: [
         { role: "system", content: [SHIPSHELL_COPILOT_SYSTEM_PROMPT, profileInstruction].filter(Boolean).join("\n\n") },
-        { role: "user", content: userInput },
+        { role: "user", content: buildMissionContent(userInput, context) },
       ],
     });
 
@@ -136,6 +137,8 @@ app.post("/api/missions", async (req, res, next) => {
         kind: decision.kind,
         contextUsed: Boolean(context?.available),
         contextUrl: context?.available ? context.url : undefined,
+        visualContextUsed: Boolean(context?.visual?.available),
+        visualAnchorCount: context?.anchors?.length ?? 0,
         semanticContextUsed: Boolean(semanticWorkspace),
         activeModule: semanticWorkspace?.activeModule,
         terminalContextUsed: Boolean(semanticWorkspace?.terminal),
