@@ -23,10 +23,13 @@ export interface MissionContext {
   error?: string;
 }
 
+export type ShipModuleId = "browser" | "ports" | "copilot" | "terminal" | "logbook";
+
 export interface MissionProfile {
   universeId: string;
   workMode: "focus" | "research" | "build" | "studio" | "command" | "casual";
   voice: "quiet" | "technical" | "creative" | "explorer" | "executive" | "conversational";
+  activeModule?: ShipModuleId;
 }
 
 export interface TerminalDecision {
