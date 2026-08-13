@@ -115,6 +115,38 @@ function activeContents() {
   return activeTabId ? tabs.get(activeTabId)?.view.webContents : undefined;
 }
 
+async function readActivePageContext() {
+  const contents = activeContents();
+  if (!contents || contents.isDestroyed()) {
+    return { available: false, title: "", url: "", selection: "", text: "" };
+  }
+
+  const title = contents.getTitle() || "";
+  const url = contents.getURL() || "";
+  try {
+    const snapshot = await contents.executeJavaScript(`(() => ({
+      selection: String(window.getSelection?.()?.toString?.() || ""),
+      text: String(document.body?.innerText || "")
+    }))()`, true);
+    return {
+      available: true,
+      title: title.slice(0, 500),
+      url: url.slice(0, 4000),
+      selection: String(snapshot?.selection || "").trim().slice(0, 4000),
+      text: String(snapshot?.text || "").replace(/\s+/g, " ").trim().slice(0, 16000),
+    };
+  } catch (error) {
+    return {
+      available: true,
+      title: title.slice(0, 500),
+      url: url.slice(0, 4000),
+      selection: "",
+      text: "",
+      error: error instanceof Error ? error.message.slice(0, 500) : "No se pudo leer el contenido visible.",
+    };
+  }
+}
+
 function registerIpc() {
   ipcMain.handle("browser:navigate", (_event, url) => {
     const contents = activeContents();
@@ -134,6 +166,7 @@ function registerIpc() {
     if (contents?.navigationHistory.canGoForward()) contents.navigationHistory.goForward();
   });
   ipcMain.handle("browser:reload", () => activeContents()?.reload());
+  ipcMain.handle("browser:get-context", () => readActivePageContext());
   ipcMain.on("browser:set-bounds", (_event, nextBounds) => {
     const windowBounds = shellWindow?.getContentBounds();
     if (!windowBounds) return;
