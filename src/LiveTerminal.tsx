@@ -1,6 +1,6 @@
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
 import { Activity, Maximize2, ShieldCheck, TerminalSquare, X } from "lucide-react";
-import { api, type TerminalPreview, type TerminalStreamEvent } from "./api";
+import { api, type TerminalPreview, type TerminalSemanticContext, type TerminalStreamEvent } from "./api";
 import "./terminal.css";
 
 const HISTORY_KEY = "shipshell.terminal.history";
@@ -22,11 +22,13 @@ export function LiveTerminal({
   focused = false,
   onSelect,
   onExpand,
+  onContext,
 }: {
   workspace?: string;
   focused?: boolean;
   onSelect?: () => void;
   onExpand?: () => void;
+  onContext?: (context: TerminalSemanticContext) => void;
 }) {
   const sessionId = useRef(window.crypto.randomUUID());
   const abortRef = useRef<AbortController | null>(null);
@@ -37,6 +39,7 @@ export function LiveTerminal({
   const [output, setOutput] = useState("ShipShell Live Terminal\n↑/↓ historial · Ctrl+L limpiar · Ctrl+C detener · Ctrl/Cmd+` enfocar\n\n");
   const [preview, setPreview] = useState<TerminalPreview | null>(null);
   const [running, setRunning] = useState(false);
+  const [lastCommand, setLastCommand] = useState<string | undefined>();
   const [history, setHistory] = useState<string[]>(() => readHistory());
   const [historyIndex, setHistoryIndex] = useState<number | null>(null);
   const [historyDraft, setHistoryDraft] = useState("");
@@ -49,6 +52,10 @@ export function LiveTerminal({
     const node = outputRef.current;
     if (node) node.scrollTop = node.scrollHeight;
   }, [output]);
+
+  useEffect(() => {
+    onContext?.({ cwd, running, lastCommand, outputTail: output.slice(-8000) });
+  }, [cwd, running, lastCommand, output, onContext]);
 
   useEffect(() => {
     if (focused) inputRef.current?.focus();
@@ -74,6 +81,7 @@ export function LiveTerminal({
   function remember(value: string) {
     const normalized = value.trim();
     if (!normalized) return;
+    setLastCommand(normalized);
     setHistory((current) => {
       const next = [...current.filter((item) => item !== normalized), normalized].slice(-MAX_HISTORY);
       window.localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
