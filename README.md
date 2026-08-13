@@ -41,7 +41,7 @@ ShipShell is designed around a simple promise:
 ShipShell Desktop
 ├── browser and tabs
 ├── intelligent Radar
-├── persistent chat
+├── persistent Copilot
 ├── integrated terminal
 ├── marketing deck
 └── orchestration layer
@@ -63,17 +63,20 @@ ShipShell will integrate proven concepts without modifying or erasing those repo
 ShipShell now has a runnable desktop MVP with:
 
 1. a native Chromium browser surface with real tabs and configurable Ports
-2. an OpenAI-powered Navigator using the Responses API
-3. a visible terminal restricted to verified read-only maneuvers
-4. a unified URL, question, and fresh-web-search Radar
-5. a persistent local Logbook
-6. ShipSeal permission boundaries for consequential actions
+2. a persistent ShipShell Copilot that can use an explicit, bounded snapshot of the active page
+3. an OpenAI-powered mission API using the Responses API
+4. a visible terminal restricted to verified read-only maneuvers
+5. a unified URL, question, and fresh-web-search Radar
+6. a persistent local Logbook
+7. ShipSeal permission boundaries for consequential actions
+
+Page context is captured only when the user asks the Copilot with context enabled. The active selection is preferred over the full page body, remote page content is treated as untrusted data, and the context toggle can disable capture entirely.
 
 Marketing integrations remain an upcoming milestone. The interface labels missing connections honestly instead of rendering fabricated campaign metrics.
 
 ## Quickstart
 
-Requirements: Node.js 20 or newer and an OpenAI API key.
+Requirements: Node.js 22 or newer and an OpenAI API key for AI missions.
 
 ```bash
 npm install
@@ -90,16 +93,29 @@ npm run desktop:dev
 
 The regular `npm run dev` web surface is retained for UI development, but external sites are never presented as iframes. Real browsing occurs in isolated Electron `WebContentsView` tabs.
 
-Validate the repository:
+Run the offline environment/security doctor:
+
+```bash
+npm run doctor
+```
+
+Run tests and the production build:
 
 ```bash
 npm run check
+```
+
+Run the full validation gate used by CI, including dependency audit:
+
+```bash
+npm run validate
 ```
 
 ## Runtime boundaries
 
 - The API binds to `127.0.0.1` by default.
 - API keys never reach the browser UI or terminal child processes.
+- Remote browser content is bounded before Electron IPC and treated as untrusted model context.
 - Terminal commands run without a shell and are checked against a read-only allowlist.
 - Absolute paths, parent traversal, shell operators, redirects, and mutations are blocked.
 - Missions and terminal outcomes are written to `.shipshell/logbook.json`, which is ignored by Git.
