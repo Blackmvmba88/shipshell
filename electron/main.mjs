@@ -117,28 +117,31 @@ function activeContents() {
 
 async function captureActivePageVisual(contents) {
   try {
-    const image = await contents.capturePage();
+    const image = await contents.capturePage(undefined, { stayHidden: true });
     const size = image.getSize();
     if (!size.width || !size.height) {
       return { available: false, imageDataUrl: "", error: "La pestaña no produjo un frame visible." };
     }
 
-    const scale = Math.min(1, 1280 / size.width, 900 / size.height);
-    const resized = scale < 1
+    const scale = Math.min(1, 1024 / size.width, 720 / size.height);
+    let working = scale < 1
       ? image.resize({ width: Math.max(1, Math.round(size.width * scale)), height: Math.max(1, Math.round(size.height * scale)) })
       : image;
-    let jpeg = resized.toJPEG(55);
 
-    if (jpeg.length > 900_000) {
-      const smallerSize = resized.getSize();
-      const smaller = resized.resize({
-        width: Math.max(1, Math.round(smallerSize.width * 0.72)),
-        height: Math.max(1, Math.round(smallerSize.height * 0.72)),
+    const targetBytes = 350_000;
+    let jpeg = working.toJPEG(46);
+    let attempts = 0;
+    while (jpeg.length > targetBytes && attempts < 3) {
+      const current = working.getSize();
+      working = working.resize({
+        width: Math.max(1, Math.round(current.width * 0.78)),
+        height: Math.max(1, Math.round(current.height * 0.78)),
       });
-      jpeg = smaller.toJPEG(48);
+      jpeg = working.toJPEG(Math.max(30, 42 - attempts * 4));
+      attempts += 1;
     }
 
-    if (jpeg.length > 1_100_000) {
+    if (jpeg.length > 450_000) {
       return { available: false, imageDataUrl: "", error: "El frame visual excedió el límite local de ShipShell." };
     }
 
@@ -155,7 +158,7 @@ async function captureActivePageVisual(contents) {
   }
 }
 
-async function readActivePageContext() {
+async function readActivePageContext({ includeVisual = false } = {}) {
   const contents = activeContents();
   if (!contents || contents.isDestroyed()) {
     return { available: false, title: "", url: "", selection: "", text: "" };
@@ -186,7 +189,7 @@ async function readActivePageContext() {
     };
   }
 
-  const visual = await captureActivePageVisual(contents);
+  const visual = includeVisual ? await captureActivePageVisual(contents) : undefined;
   return {
     available: true,
     title: title.slice(0, 500),
@@ -217,7 +220,7 @@ function registerIpc() {
     if (contents?.navigationHistory.canGoForward()) contents.navigationHistory.goForward();
   });
   ipcMain.handle("browser:reload", () => activeContents()?.reload());
-  ipcMain.handle("browser:get-context", () => readActivePageContext());
+  ipcMain.handle("browser:get-context", (_event, options) => readActivePageContext({ includeVisual: Boolean(options?.includeVisual) }));
   ipcMain.on("browser:set-bounds", (_event, nextBounds) => {
     const windowBounds = shellWindow?.getContentBounds();
     if (!windowBounds) return;
