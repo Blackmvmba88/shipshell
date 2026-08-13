@@ -44,10 +44,10 @@ export class TerminalSealStore {
     return { id: ticket.id, fingerprint: ticket.fingerprint, expiresAt: new Date(ticket.expiresAt).toISOString() };
   }
 
-  approve(id: string, providedFingerprint: string): boolean {
+  approve(id: string, sessionId: string, providedFingerprint: string): boolean {
     this.prune();
     const ticket = this.tickets.get(id);
-    if (!ticket || ticket.used || ticket.fingerprint !== providedFingerprint) return false;
+    if (!ticket || ticket.used || ticket.sessionId !== sessionId || ticket.fingerprint !== providedFingerprint) return false;
     ticket.approved = true;
     return true;
   }
