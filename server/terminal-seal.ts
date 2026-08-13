@@ -3,6 +3,7 @@ import type { CommandDecision } from "./guard.js";
 
 interface Ticket {
   id: string;
+  sessionId: string;
   fingerprint: string;
   command: string;
   cwd: string;
@@ -17,9 +18,9 @@ export interface PublicSealTicket {
   expiresAt: string;
 }
 
-function fingerprint(command: string, cwd: string, decision: CommandDecision): string {
+function fingerprint(sessionId: string, command: string, cwd: string, decision: CommandDecision): string {
   return createHash("sha256")
-    .update(JSON.stringify({ command, cwd, risk: decision.risk, executable: decision.executable, args: decision.args, builtin: decision.builtin }))
+    .update(JSON.stringify({ sessionId, command, cwd, risk: decision.risk, executable: decision.executable, args: decision.args, builtin: decision.builtin }))
     .digest("hex");
 }
 
@@ -27,11 +28,12 @@ export class TerminalSealStore {
   private readonly tickets = new Map<string, Ticket>();
   constructor(private readonly ttlMs = 60_000) {}
 
-  issue(command: string, cwd: string, decision: CommandDecision): PublicSealTicket {
+  issue(sessionId: string, command: string, cwd: string, decision: CommandDecision): PublicSealTicket {
     this.prune();
     const ticket: Ticket = {
       id: randomUUID(),
-      fingerprint: fingerprint(command, cwd, decision),
+      sessionId,
+      fingerprint: fingerprint(sessionId, command, cwd, decision),
       command,
       cwd,
       approved: false,
@@ -50,14 +52,14 @@ export class TerminalSealStore {
     return true;
   }
 
-  consume(id: string | undefined, command: string, cwd: string, decision: CommandDecision): boolean {
+  consume(id: string | undefined, sessionId: string, command: string, cwd: string, decision: CommandDecision): boolean {
     if (!decision.requiresSeal) return true;
     if (!id) return false;
     this.prune();
     const ticket = this.tickets.get(id);
     if (!ticket || ticket.used || !ticket.approved) return false;
-    const expected = fingerprint(command, cwd, decision);
-    if (ticket.command !== command || ticket.cwd !== cwd || ticket.fingerprint !== expected) return false;
+    const expected = fingerprint(sessionId, command, cwd, decision);
+    if (ticket.sessionId !== sessionId || ticket.command !== command || ticket.cwd !== cwd || ticket.fingerprint !== expected) return false;
     ticket.used = true;
     return true;
   }
