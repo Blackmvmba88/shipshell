@@ -14,6 +14,15 @@ export interface LogEntry {
   summary: string;
 }
 
+export interface MissionContext {
+  available: boolean;
+  title: string;
+  url: string;
+  selection: string;
+  text: string;
+  error?: string;
+}
+
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...options,
@@ -27,9 +36,9 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 export const api = {
   health: () => request<Health>("/api/health"),
   logbook: () => request<{ entries: LogEntry[] }>("/api/logbook"),
-  mission: (input: string) => request<{ decision: { kind: string; normalizedInput: string }; answer?: string }>("/api/missions", {
+  mission: (input: string, context?: MissionContext) => request<{ decision: { kind: string; normalizedInput: string }; answer?: string }>("/api/missions", {
     method: "POST",
-    body: JSON.stringify({ input }),
+    body: JSON.stringify({ input, context }),
   }),
   runCommand: (command: string) => request<{ stdout: string; stderr: string; exitCode: number | null }>("/api/terminal/run", {
     method: "POST",
