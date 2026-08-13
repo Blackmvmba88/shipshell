@@ -1,9 +1,12 @@
 import { z } from "zod";
 
+export const shipModuleSchema = z.enum(["browser", "ports", "copilot", "terminal", "logbook"]);
+
 export const copilotProfileSchema = z.object({
   universeId: z.string().trim().min(1).max(80),
   workMode: z.enum(["focus", "research", "build", "studio", "command", "casual"]),
   voice: z.enum(["quiet", "technical", "creative", "explorer", "executive", "conversational"]),
+  activeModule: shipModuleSchema.optional(),
 });
 
 export type CopilotProfile = z.infer<typeof copilotProfileSchema>;
@@ -26,12 +29,22 @@ const workModeInstructions: Record<CopilotProfile["workMode"], string> = {
   casual: "Prioriza facilidad, claridad y acompañamiento sin convertir cada pregunta en un procedimiento pesado.",
 };
 
+const moduleInstructions: Record<NonNullable<CopilotProfile["activeModule"]>, string> = {
+  browser: "El usuario está trabajando principalmente con la página o navegación activa. Prioriza lo visible en esa experiencia.",
+  ports: "El usuario está trabajando con accesos, servicios o herramientas conectadas. Prioriza integración y flujo entre herramientas.",
+  copilot: "El usuario está trabajando directamente contigo. Prioriza claridad conversacional, contexto y próximos movimientos útiles.",
+  terminal: "El usuario está trabajando en terminal. Prioriza comandos exactos, estado del proyecto, debugging y verificaciones reproducibles.",
+  logbook: "El usuario está revisando evidencia y actividad. Prioriza trazabilidad, cambios, resultados, bloqueos y discrepancias.",
+};
+
 export function buildCopilotProfileInstruction(profile?: CopilotProfile): string {
   if (!profile) return "";
   return [
     `Universo activo: ${profile.universeId}.`,
     `Modo de trabajo: ${profile.workMode}. ${workModeInstructions[profile.workMode]}`,
     `Voz del copiloto: ${profile.voice}. ${voiceInstructions[profile.voice]}`,
+    profile.activeModule ? `Módulo activo: ${profile.activeModule}. ${moduleInstructions[profile.activeModule]}` : "",
+    "El módulo activo orienta la atención, pero no concede permisos adicionales ni implica que una acción ya ocurrió.",
     "La voz cambia presentación y énfasis, pero nunca cambia las reglas de seguridad, permisos, hechos ni límites de ShipSeal.",
-  ].join(" ");
+  ].filter(Boolean).join(" ");
 }

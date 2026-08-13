@@ -2,6 +2,7 @@ import { app, BrowserWindow, WebContentsView, ipcMain, session } from "electron"
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { annotationBootstrap, annotationModes } from "./visual-anchors.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const preload = path.join(here, "preload.cjs");
@@ -11,6 +12,7 @@ let shellWindow;
 let activeTabId = null;
 let browserBounds = { x: 103, y: 331, width: 900, height: 420 };
 let browserVisible = true;
+let annotationMode = "off";
 const tabs = new Map();
 
 const publicTab = (tab) => ({
@@ -37,6 +39,7 @@ function activateTab(id) {
     tab.view.setVisible(browserVisible && tab.id === id);
     if (tab.id === id) tab.view.setBounds(browserBounds);
   }
+  if (annotationMode !== "off") applyAnnotationMode(activeContents(), annotationMode).catch(() => undefined);
   publishState();
 }
 
@@ -81,7 +84,13 @@ function createTab(requestedUrl) {
     publishState();
   };
   view.webContents.on("did-start-loading", () => { tab.loading = true; sync(); });
-  view.webContents.on("did-stop-loading", () => { tab.loading = false; sync(); });
+  view.webContents.on("did-stop-loading", () => {
+    tab.loading = false;
+    sync();
+    if (tab.id === activeTabId && annotationMode !== "off") {
+      applyAnnotationMode(view.webContents, annotationMode).catch(() => undefined);
+    }
+  });
   view.webContents.on("page-title-updated", (_event, title) => { tab.title = title; publishState(); });
   view.webContents.on("did-navigate", sync);
   view.webContents.on("did-navigate-in-page", sync);
@@ -115,14 +124,86 @@ function activeContents() {
   return activeTabId ? tabs.get(activeTabId)?.view.webContents : undefined;
 }
 
-async function readActivePageContext() {
+async function applyAnnotationMode(contents, mode) {
+  if (!contents || contents.isDestroyed()) return { mode: "off", anchors: [] };
+  const nextMode = annotationModes.has(mode) ? mode : "off";
+  return contents.executeJavaScript(annotationBootstrap(nextMode), true);
+}
+
+async function clearVisualAnchors(contents) {
+  if (!contents || contents.isDestroyed()) return [];
+  return contents.executeJavaScript(`(() => {
+    const state = window.__shipshellVisualAnchorsV1;
+    if (!state) return [];
+    state.clear();
+    return state.exportAnchors();
+  })()`, true).catch(() => []);
+}
+
+async function readVisualAnchors(contents) {
+  if (!contents || contents.isDestroyed()) return [];
+  return contents.executeJavaScript(
+    `(() => window.__shipshellVisualAnchorsV1?.exportAnchors?.() || [])()`,
+    true,
+  ).catch(() => []);
+}
+
+async function captureActivePageVisual(contents) {
+  try {
+    const image = await contents.capturePage();
+    const size = image.getSize();
+    if (!size.width || !size.height) {
+      return { available: false, imageDataUrl: "", error: "La pestaña no produjo un frame visible." };
+    }
+
+    const scale = Math.min(1, 1024 / size.width, 720 / size.height);
+    let working = scale < 1
+      ? image.resize({
+          width: Math.max(1, Math.round(size.width * scale)),
+          height: Math.max(1, Math.round(size.height * scale)),
+        })
+      : image;
+
+    const targetBytes = 350_000;
+    let jpeg = working.toJPEG(46);
+    let attempts = 0;
+    while (jpeg.length > targetBytes && attempts < 3) {
+      const current = working.getSize();
+      working = working.resize({
+        width: Math.max(1, Math.round(current.width * 0.78)),
+        height: Math.max(1, Math.round(current.height * 0.78)),
+      });
+      jpeg = working.toJPEG(Math.max(30, 42 - attempts * 4));
+      attempts += 1;
+    }
+
+    if (jpeg.length > 450_000) {
+      return { available: false, imageDataUrl: "", error: "El frame visual excedió el límite local de ShipShell." };
+    }
+
+    return {
+      available: true,
+      imageDataUrl: `data:image/jpeg;base64,${jpeg.toString("base64")}`,
+    };
+  } catch (error) {
+    return {
+      available: false,
+      imageDataUrl: "",
+      error: error instanceof Error ? error.message.slice(0, 500) : "No se pudo capturar el frame visual.",
+    };
+  }
+}
+
+async function readActivePageContext({ includeVisual = false } = {}) {
   const contents = activeContents();
   if (!contents || contents.isDestroyed()) {
-    return { available: false, title: "", url: "", selection: "", text: "" };
+    return { available: false, title: "", url: "", selection: "", text: "", anchors: [] };
   }
 
   const title = contents.getTitle() || "";
   const url = contents.getURL() || "";
+  let semantic = { selection: "", text: "", error: undefined };
+
   try {
     const snapshot = await contents.executeJavaScript(`(() => {
       const selection = String(window.getSelection?.()?.toString?.() || "").trim().slice(0, 4000);
@@ -131,23 +212,33 @@ async function readActivePageContext() {
         : String(document.body?.innerText || "").replace(/\\s+/g, " ").trim().slice(0, 16000);
       return { selection, text };
     })()`, true);
-    return {
-      available: true,
-      title: title.slice(0, 500),
-      url: url.slice(0, 4000),
+    semantic = {
       selection: String(snapshot?.selection || ""),
       text: String(snapshot?.text || ""),
+      error: undefined,
     };
   } catch (error) {
-    return {
-      available: true,
-      title: title.slice(0, 500),
-      url: url.slice(0, 4000),
+    semantic = {
       selection: "",
       text: "",
       error: error instanceof Error ? error.message.slice(0, 500) : "No se pudo leer el contenido visible.",
     };
   }
+
+  const [anchors, visual] = await Promise.all([
+    readVisualAnchors(contents),
+    includeVisual ? captureActivePageVisual(contents) : Promise.resolve(undefined),
+  ]);
+  return {
+    available: true,
+    title: title.slice(0, 500),
+    url: url.slice(0, 4000),
+    selection: semantic.selection,
+    text: semantic.text,
+    error: semantic.error,
+    anchors,
+    visual,
+  };
 }
 
 function registerIpc() {
@@ -169,7 +260,15 @@ function registerIpc() {
     if (contents?.navigationHistory.canGoForward()) contents.navigationHistory.goForward();
   });
   ipcMain.handle("browser:reload", () => activeContents()?.reload());
-  ipcMain.handle("browser:get-context", () => readActivePageContext());
+  ipcMain.handle("browser:get-context", (_event, options) =>
+    readActivePageContext({ includeVisual: Boolean(options?.includeVisual) }),
+  );
+  ipcMain.handle("browser:set-annotation-mode", async (_event, mode) => {
+    annotationMode = annotationModes.has(mode) ? mode : "off";
+    return applyAnnotationMode(activeContents(), annotationMode);
+  });
+  ipcMain.handle("browser:clear-annotations", () => clearVisualAnchors(activeContents()));
+  ipcMain.handle("browser:get-annotations", () => readVisualAnchors(activeContents()));
   ipcMain.on("browser:set-bounds", (_event, nextBounds) => {
     const windowBounds = shellWindow?.getContentBounds();
     if (!windowBounds) return;
