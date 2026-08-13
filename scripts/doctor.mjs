@@ -30,6 +30,8 @@ for (const file of [
   "src/LiveTerminal.tsx",
   "src/modules.ts",
   "src/modules.test.ts",
+  "src/update-plan.ts",
+  "src/update-plan.test.ts",
   "src/modules.css",
   "src/terminal.css",
   "src/universes.ts",
@@ -41,12 +43,9 @@ for (const file of [
 }
 
 const pkg = JSON.parse(read("package.json"));
-if (pkg.private === true) ok("package is private");
-else fail("package.json must remain private");
-if (pkg.type === "module") ok("ES module mode enabled");
-else fail("package.json type must be module");
-if (pkg.main === "electron/main.mjs") ok("Electron entrypoint configured");
-else fail("unexpected Electron entrypoint");
+if (pkg.private === true) ok("package is private"); else fail("package.json must remain private");
+if (pkg.type === "module") ok("ES module mode enabled"); else fail("package.json type must be module");
+if (pkg.main === "electron/main.mjs") ok("Electron entrypoint configured"); else fail("unexpected Electron entrypoint");
 
 const html = read("index.html");
 if (html.includes("default-src 'self'") && html.includes("object-src 'none'") && html.includes("frame-src 'none'")) ok("deck CSP baseline present");
@@ -58,16 +57,13 @@ else warn("a stylesheet references a remote asset; prefer local/system assets un
 
 const universes = read("src/universes.ts");
 for (const mode of ["focus", "research", "build", "studio", "command", "casual"]) {
-  if (universes.includes(`workMode: \"${mode}\"`)) ok(`universe mode present: ${mode}`);
-  else fail(`missing universe mode: ${mode}`);
+  if (universes.includes(`workMode: \"${mode}\"`)) ok(`universe mode present: ${mode}`); else fail(`missing universe mode: ${mode}`);
 }
-if (universes.includes("window.localStorage.setItem(\"shipshell.universe\"")) ok("universe preference persists locally");
-else fail("universe preference persistence missing");
+if (universes.includes("window.localStorage.setItem(\"shipshell.universe\"")) ok("universe preference persists locally"); else fail("universe preference persistence missing");
 
 const profile = read("server/copilot-profile.ts");
 for (const voice of ["quiet", "technical", "creative", "explorer", "executive", "conversational"]) {
-  if (profile.includes(`${voice}:`)) ok(`copilot voice present: ${voice}`);
-  else fail(`missing copilot voice: ${voice}`);
+  if (profile.includes(`${voice}:`)) ok(`copilot voice present: ${voice}`); else fail(`missing copilot voice: ${voice}`);
 }
 if (profile.includes("activeModule") && profile.includes("no concede permisos adicionales")) ok("active module guides attention without granting authority");
 else fail("active module context must not grant permissions");
@@ -76,11 +72,14 @@ else fail("voice profiles must explicitly preserve ShipSeal safety boundary");
 
 const modules = read("src/modules.ts");
 for (const moduleId of ["browser", "ports", "copilot", "terminal", "logbook"]) {
-  if (modules.includes(`id: \"${moduleId}\"`)) ok(`work module present: ${moduleId}`);
-  else fail(`missing work module: ${moduleId}`);
+  if (modules.includes(`id: \"${moduleId}\"`)) ok(`work module present: ${moduleId}`); else fail(`missing work module: ${moduleId}`);
 }
 if (modules.includes("version: 1") && modules.includes("capabilities:") && modules.includes("accepts:") && modules.includes("provides:") && modules.includes("canConnectModules")) ok("work modules expose versioned composable contracts");
 else fail("work modules must expose versioned capability/signal contracts");
+
+const updatePlan = read("src/update-plan.ts");
+if (updatePlan.includes('"hot"') && updatePlan.includes('"safe-handoff"') && updatePlan.includes("saveWorkspaceCheckpoint")) ok("runtime updates distinguish hot swap from safe handoff and preserve workspace state");
+else fail("runtime update planner is incomplete");
 
 const app = read("src/App.tsx");
 if (app.includes("activeModule") && app.includes("expandedModule") && app.includes("moduleByShortcut")) ok("module selection, expansion, and keyboard focus are wired");
@@ -90,43 +89,28 @@ const server = read("server/index.ts");
 const guard = read("server/guard.ts");
 const terminalSeal = read("server/terminal-seal.ts");
 const liveTerminal = read("src/LiveTerminal.tsx");
-if (server.includes("/api/terminal/run-stream") && server.includes("application/x-ndjson")) ok("live terminal streams process output");
-else fail("live terminal streaming route missing");
-if (server.includes("terminalSessions = new Map") && server.includes("resolveTerminalDirectory") && server.includes("session.cwd")) ok("terminal cwd is session-aware and workspace-bounded");
-else fail("terminal session cwd boundary missing");
-if (terminalSeal.includes("sessionId") && terminalSeal.includes("approved: false") && terminalSeal.includes("ticket.used = true") && terminalSeal.includes("ttlMs = 60_000")) ok("terminal ShipSeal is session-bound, explicit, expiring, and single-use");
-else fail("terminal ShipSeal must be session-bound, explicit, expiring, and single-use");
-if (guard.includes("BLOCKED_EXECUTABLES") && guard.includes("requiresSeal: true") && guard.includes("reviewGit")) ok("terminal policy separates direct, sealed, external, and blocked maneuvers");
-else fail("terminal risk policy is incomplete");
-if (server.includes("shell: false") && server.includes("delete env[key]") && server.includes("OPENAI_API_KEY")) ok("terminal child processes avoid shell expansion and secret inheritance");
-else fail("terminal process isolation needs review");
-if (server.includes("res.on(\"close\"") && server.includes("SIGINT")) ok("terminal process cancellation propagates to the child process");
-else fail("terminal cancellation wiring missing");
-if (liveTerminal.includes("HISTORY_KEY") && liveTerminal.includes("ArrowUp") && liveTerminal.includes("Ctrl+L") && /abortRef\.current\?*\.abort\(\)/.test(liveTerminal)) ok("terminal developer ergonomics include history, clear, focus, and Ctrl+C cancellation");
-else fail("terminal developer ergonomics are incomplete");
-if (liveTerminal.includes("Sellar y ejecutar") && liveTerminal.includes("runCommandStream")) ok("terminal UI exposes explicit ShipSeal and live output");
-else fail("terminal UI is not wired to live ShipSeal flow");
+if (server.includes("/api/terminal/run-stream") && server.includes("application/x-ndjson")) ok("live terminal streams process output"); else fail("live terminal streaming route missing");
+if (server.includes("terminalSessions = new Map") && server.includes("resolveTerminalDirectory") && server.includes("session.cwd")) ok("terminal cwd is session-aware and workspace-bounded"); else fail("terminal session cwd boundary missing");
+if (terminalSeal.includes("sessionId") && terminalSeal.includes("approved: false") && terminalSeal.includes("ticket.used = true") && terminalSeal.includes("ttlMs = 60_000")) ok("terminal ShipSeal is session-bound, explicit, expiring, and single-use"); else fail("terminal ShipSeal must be session-bound, explicit, expiring, and single-use");
+if (guard.includes("BLOCKED_EXECUTABLES") && guard.includes("requiresSeal: true") && guard.includes("reviewGit")) ok("terminal policy separates direct, sealed, external, and blocked maneuvers"); else fail("terminal risk policy is incomplete");
+if (server.includes("shell: false") && server.includes("delete env[key]") && server.includes("OPENAI_API_KEY")) ok("terminal child processes avoid shell expansion and secret inheritance"); else fail("terminal process isolation needs review");
+if (server.includes("res.on(\"close\"") && server.includes("SIGINT")) ok("terminal process cancellation propagates to the child process"); else fail("terminal cancellation wiring missing");
+if (liveTerminal.includes("HISTORY_KEY") && liveTerminal.includes("ArrowUp") && liveTerminal.includes("Ctrl+L") && /abortRef\.current\?\.abort\(\)/.test(liveTerminal)) ok("terminal developer ergonomics include history, clear, focus, and Ctrl+C cancellation"); else fail("terminal developer ergonomics are incomplete");
+if (liveTerminal.includes("Sellar y ejecutar") && liveTerminal.includes("runCommandStream")) ok("terminal UI exposes explicit ShipSeal and live output"); else fail("terminal UI is not wired to live ShipSeal flow");
 
 const gitignore = read(".gitignore");
-if (gitignore.includes(".env") && gitignore.includes(".shipshell/")) ok("secrets and runtime state are ignored");
-else fail(".gitignore is missing secret/runtime exclusions");
+if (gitignore.includes(".env") && gitignore.includes(".shipshell/")) ok("secrets and runtime state are ignored"); else fail(".gitignore is missing secret/runtime exclusions");
 
 const preload = read("electron/preload.cjs");
-if (preload.includes("contextBridge.exposeInMainWorld") && !preload.includes("OPENAI_API_KEY")) ok("preload bridge is narrow and secret-free");
-else fail("preload bridge boundary needs review");
+if (preload.includes("contextBridge.exposeInMainWorld") && !preload.includes("OPENAI_API_KEY")) ok("preload bridge is narrow and secret-free"); else fail("preload bridge boundary needs review");
 
 const main = read("electron/main.mjs");
 for (const boundary of ["nodeIntegration: false", "contextIsolation: true", "sandbox: true", "webSecurity: true"]) {
-  if (main.includes(boundary)) ok(`browser boundary: ${boundary}`);
-  else fail(`missing browser boundary: ${boundary}`);
+  if (main.includes(boundary)) ok(`browser boundary: ${boundary}`); else fail(`missing browser boundary: ${boundary}`);
 }
 
-if (process.env.SHIPSHELL_PORT && !/^\d{2,5}$/.test(process.env.SHIPSHELL_PORT)) fail("SHIPSHELL_PORT must be numeric");
-else ok("SHIPSHELL_PORT looks valid");
-
-if (process.env.OPENAI_API_KEY) ok("OPENAI_API_KEY configured for this shell");
-else if (process.env.CI) info("OPENAI_API_KEY intentionally absent in CI");
-else warn("OPENAI_API_KEY not set; AI missions will run in local/no-AI mode");
+if (process.env.SHIPSHELL_PORT && !/^\d{2,5}$/.test(process.env.SHIPSHELL_PORT)) fail("SHIPSHELL_PORT must be numeric"); else ok("SHIPSHELL_PORT looks valid");
+if (process.env.OPENAI_API_KEY) ok("OPENAI_API_KEY configured for this shell"); else if (process.env.CI) info("OPENAI_API_KEY intentionally absent in CI"); else warn("OPENAI_API_KEY not set; AI missions will run in local/no-AI mode");
 
 console.log(`\nDoctor result: ${failures} failure(s), ${warnings} warning(s).`);
 process.exitCode = failures ? 1 : 0;
