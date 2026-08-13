@@ -20,10 +20,10 @@ import {
   Send,
   ShieldCheck,
   Sparkles,
-  TerminalSquare,
   X,
 } from "lucide-react";
 import { api, type Health, type LogEntry } from "./api";
+import { LiveTerminal } from "./LiveTerminal";
 import { applyUniverse, readStoredUniverse, UNIVERSES, type Universe } from "./universes";
 import "./copilot.css";
 import "./universes.css";
@@ -50,8 +50,6 @@ function App() {
   const [copilotInput, setCopilotInput] = useState("");
   const [answer, setAnswer] = useState("Voy contigo. Abre una página y pregúntame lo que quieras sobre ella.");
   const [url, setUrl] = useState("shipshell://home");
-  const [command, setCommand] = useState("git status");
-  const [terminal, setTerminal] = useState("$ ShipShell terminal seguro\n$ Sólo maniobras de lectura durante el MVP.\n");
   const [busy, setBusy] = useState(false);
   const [contextEnabled, setContextEnabled] = useState(true);
   const [pageContext, setPageContext] = useState<ShipShellPageContext | null>(null);
@@ -150,19 +148,6 @@ function App() {
     setUrl(href);
     setActiveDeck("browser");
     if (nativeBrowser) nativeBrowser.navigate(href);
-  }
-
-  async function runCommand(event: FormEvent) {
-    event.preventDefault();
-    if (!command.trim()) return;
-    setTerminal((current) => `${current}\n$ ${command}\n`);
-    try {
-      const result = await api.runCommand(command);
-      setTerminal((current) => `${current}${result.stdout}${result.stderr}${result.exitCode ? `\n[exit ${result.exitCode}]` : ""}\n`);
-      await refresh();
-    } catch (error) {
-      setTerminal((current) => `${current}[ShipSeal] ${error instanceof Error ? error.message : "Bloqueado"}\n`);
-    }
   }
 
   return (
@@ -265,11 +250,7 @@ function App() {
           <div className="mission-stats"><div><span>MISIONES</span><strong>{entries.filter((e) => e.event === "mission").length}</strong></div><div><span>BLOQUEOS</span><strong>{entries.filter((e) => e.status === "blocked").length}</strong></div></div>
         </aside>
 
-        <section className="terminal-panel">
-          <div className="terminal-title"><TerminalSquare size={15} /><span>TERMINAL // {health?.workspace ?? "conectando"}</span><span>LECTURA SEGURA</span></div>
-          <pre>{terminal}</pre>
-          <form onSubmit={runCommand}><span>$</span><input value={command} onChange={(event) => setCommand(event.target.value)} aria-label="Comando de terminal" autoComplete="off" /><button>Ejecutar</button></form>
-        </section>
+        <LiveTerminal workspace={health?.workspace} />
       </main>
     </div>
   );
