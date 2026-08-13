@@ -111,7 +111,11 @@ function App() {
         if (snapshot.available) context = snapshot;
       }
 
-      const result = await api.mission(cleanInput, context);
+      const result = await api.mission(cleanInput, context, {
+        universeId: universe.id,
+        workMode: universe.workMode,
+        voice: universe.voice,
+      });
       if (result.decision.kind === "navigate") {
         setUrl(result.decision.normalizedInput);
         setActiveDeck("browser");
