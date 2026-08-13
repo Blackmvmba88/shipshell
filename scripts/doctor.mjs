@@ -28,6 +28,8 @@ for (const file of [
   "server/terminal-seal.ts",
   "src/App.tsx",
   "src/LiveTerminal.tsx",
+  "src/modules.ts",
+  "src/modules.css",
   "src/terminal.css",
   "src/universes.ts",
   "src/universes.css",
@@ -49,7 +51,7 @@ const html = read("index.html");
 if (html.includes("default-src 'self'") && html.includes("object-src 'none'") && html.includes("frame-src 'none'")) ok("deck CSP baseline present");
 else fail("deck CSP baseline is incomplete");
 
-const styles = [read("src/styles.css"), read("src/universes.css"), read("src/terminal.css")].join("\n");
+const styles = [read("src/styles.css"), read("src/universes.css"), read("src/terminal.css"), read("src/modules.css")].join("\n");
 if (!/https?:\/\//i.test(styles)) ok("stylesheets have no remote asset dependency");
 else warn("a stylesheet references a remote asset; prefer local/system assets under the current CSP");
 
@@ -66,8 +68,19 @@ for (const voice of ["quiet", "technical", "creative", "explorer", "executive", 
   if (profile.includes(`${voice}:`)) ok(`copilot voice present: ${voice}`);
   else fail(`missing copilot voice: ${voice}`);
 }
+if (profile.includes("activeModule") && profile.includes("no concede permisos adicionales")) ok("active module guides attention without granting authority");
+else fail("active module context must not grant permissions");
 if (profile.includes("nunca cambia las reglas de seguridad") && profile.includes("ShipSeal")) ok("voice profiles preserve ShipSeal boundary");
 else fail("voice profiles must explicitly preserve ShipSeal safety boundary");
+
+const modules = read("src/modules.ts");
+for (const moduleId of ["browser", "ports", "copilot", "terminal", "logbook"]) {
+  if (modules.includes(`id: \"${moduleId}\"`)) ok(`work module present: ${moduleId}`);
+  else fail(`missing work module: ${moduleId}`);
+}
+const app = read("src/App.tsx");
+if (app.includes("activeModule") && app.includes("expandedModule") && app.includes("moduleByShortcut")) ok("module selection, expansion, and keyboard focus are wired");
+else fail("module focus system is incomplete");
 
 const server = read("server/index.ts");
 const guard = read("server/guard.ts");
@@ -75,14 +88,18 @@ const terminalSeal = read("server/terminal-seal.ts");
 const liveTerminal = read("src/LiveTerminal.tsx");
 if (server.includes("/api/terminal/run-stream") && server.includes("application/x-ndjson")) ok("live terminal streams process output");
 else fail("live terminal streaming route missing");
-if (server.includes("let terminalCwd = workspace") && server.includes("resolveTerminalDirectory")) ok("terminal cwd is session-aware and workspace-bounded");
-else fail("terminal cwd boundary missing");
-if (terminalSeal.includes("approved: false") && terminalSeal.includes("ticket.used = true") && terminalSeal.includes("ttlMs = 60_000")) ok("terminal ShipSeal is explicit, expiring, and single-use");
-else fail("terminal ShipSeal must be explicit, expiring, and single-use");
-if (guard.includes("shell") && guard.includes("BLOCKED_EXECUTABLES") && guard.includes("requiresSeal: true")) ok("terminal policy separates direct, sealed, and blocked maneuvers");
+if (server.includes("terminalSessions = new Map") && server.includes("resolveTerminalDirectory") && server.includes("session.cwd")) ok("terminal cwd is session-aware and workspace-bounded");
+else fail("terminal session cwd boundary missing");
+if (terminalSeal.includes("sessionId") && terminalSeal.includes("approved: false") && terminalSeal.includes("ticket.used = true") && terminalSeal.includes("ttlMs = 60_000")) ok("terminal ShipSeal is session-bound, explicit, expiring, and single-use");
+else fail("terminal ShipSeal must be session-bound, explicit, expiring, and single-use");
+if (guard.includes("BLOCKED_EXECUTABLES") && guard.includes("requiresSeal: true") && guard.includes("reviewGit")) ok("terminal policy separates direct, sealed, external, and blocked maneuvers");
 else fail("terminal risk policy is incomplete");
-if (server.includes("shell: false") && server.includes("OPENAI_API_KEY: undefined")) ok("terminal child processes avoid shell expansion and secret inheritance");
+if (server.includes("shell: false") && server.includes("delete env[key]") && server.includes("OPENAI_API_KEY")) ok("terminal child processes avoid shell expansion and secret inheritance");
 else fail("terminal process isolation needs review");
+if (server.includes("res.on(\"close\"") && server.includes("SIGINT")) ok("terminal process cancellation propagates to the child process");
+else fail("terminal cancellation wiring missing");
+if (liveTerminal.includes("HISTORY_KEY") && liveTerminal.includes("ArrowUp") && liveTerminal.includes("Ctrl+L") && liveTerminal.includes("abortRef.current.abort()")) ok("terminal developer ergonomics include history, clear, focus, and Ctrl+C cancellation");
+else fail("terminal developer ergonomics are incomplete");
 if (liveTerminal.includes("Sellar y ejecutar") && liveTerminal.includes("runCommandStream")) ok("terminal UI exposes explicit ShipSeal and live output");
 else fail("terminal UI is not wired to live ShipSeal flow");
 
