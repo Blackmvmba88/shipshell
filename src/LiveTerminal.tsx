@@ -1,18 +1,46 @@
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
 import { Activity, ShieldCheck, TerminalSquare, X } from "lucide-react";
 import { api, type TerminalPreview, type TerminalStreamEvent } from "./api";
 import "./terminal.css";
 
-export function LiveTerminal({ workspace }: { workspace?: string }) {
+const HISTORY_KEY = "shipshell.terminal.history";
+const MAX_HISTORY = 100;
+
+function readHistory(): string[] {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(HISTORY_KEY) ?? "[]");
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === "string").slice(-MAX_HISTORY)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+export function LiveTerminal({
+  workspace,
+  focused = false,
+  onSelect,
+}: {
+  workspace?: string;
+  focused?: boolean;
+  onSelect?: () => void;
+}) {
+  const sessionId = useRef(window.crypto.randomUUID());
+  const abortRef = useRef<AbortController | null>(null);
+  const outputRef = useRef<HTMLPreElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const [command, setCommand] = useState("git status");
   const [cwd, setCwd] = useState(".");
-  const [output, setOutput] = useState("ShipShell Live Terminal\nLecturas directas · mutaciones bajo ShipSeal\n\n");
+  const [output, setOutput] = useState("ShipShell Live Terminal\n↑/↓ historial · Ctrl+L limpiar · Ctrl+C detener · Ctrl/Cmd+` enfocar\n\n");
   const [preview, setPreview] = useState<TerminalPreview | null>(null);
   const [running, setRunning] = useState(false);
-  const outputRef = useRef<HTMLPreElement | null>(null);
+  const [history, setHistory] = useState<string[]>(() => readHistory());
+  const [historyIndex, setHistoryIndex] = useState<number | null>(null);
+  const [historyDraft, setHistoryDraft] = useState("");
 
   useEffect(() => {
-    api.terminalState().then((state) => setCwd(state.cwd)).catch(() => undefined);
+    api.terminalState(sessionId.current).then((state) => setCwd(state.cwd)).catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -20,7 +48,38 @@ export function LiveTerminal({ workspace }: { workspace?: string }) {
     if (node) node.scrollTop = node.scrollHeight;
   }, [output]);
 
+  useEffect(() => {
+    if (focused) inputRef.current?.focus();
+  }, [focused]);
+
+  useEffect(() => {
+    const shortcut = (event: globalThis.KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === "`") {
+        event.preventDefault();
+        onSelect?.();
+        inputRef.current?.focus();
+      }
+      if (event.key === "Escape" && preview) setPreview(null);
+    };
+    window.addEventListener("keydown", shortcut);
+    return () => window.removeEventListener("keydown", shortcut);
+  }, [onSelect, preview]);
+
+  useEffect(() => () => abortRef.current?.abort(), []);
+
   const append = (value: string) => setOutput((current) => `${current}${value}`);
+
+  function remember(value: string) {
+    const normalized = value.trim();
+    if (!normalized) return;
+    setHistory((current) => {
+      const next = [...current.filter((item) => item !== normalized), normalized].slice(-MAX_HISTORY);
+      window.localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+      return next;
+    });
+    setHistoryIndex(null);
+    setHistoryDraft("");
+  }
 
   function handleStreamEvent(event: TerminalStreamEvent) {
     if (event.type === "stdout" || event.type === "stderr") append(event.data);
@@ -30,20 +89,26 @@ export function LiveTerminal({ workspace }: { workspace?: string }) {
     if (event.type === "exit") {
       setCwd(event.cwd);
       if (event.exitCode && event.exitCode !== 0) append(`\n[exit ${event.exitCode}]\n`);
-      else if (output && !output.endsWith("\n")) append("\n");
+      else append("\n");
     }
   }
 
   async function execute(commandToRun: string, sealId?: string) {
+    const controller = new AbortController();
+    abortRef.current = controller;
     setRunning(true);
     setPreview(null);
+    remember(commandToRun);
     append(`${cwd} $ ${commandToRun}\n`);
     try {
-      await api.runCommandStream(commandToRun, sealId, handleStreamEvent);
+      await api.runCommandStream(sessionId.current, commandToRun, sealId, handleStreamEvent, controller.signal);
     } catch (error) {
-      append(`[ShipSeal] ${error instanceof Error ? error.message : "Maniobra bloqueada"}\n`);
+      if (error instanceof DOMException && error.name === "AbortError") append("^C\n");
+      else append(`[ShipSeal] ${error instanceof Error ? error.message : "Maniobra bloqueada"}\n`);
     } finally {
+      if (abortRef.current === controller) abortRef.current = null;
       setRunning(false);
+      requestAnimationFrame(() => inputRef.current?.focus());
     }
   }
 
@@ -51,10 +116,13 @@ export function LiveTerminal({ workspace }: { workspace?: string }) {
     event.preventDefault();
     const next = command.trim();
     if (!next || running) return;
+    onSelect?.();
     try {
-      const nextPreview = await api.previewCommand(next);
+      const nextPreview = await api.previewCommand(sessionId.current, next);
+      setCwd(nextPreview.cwd);
       if (!nextPreview.decision.allowed) {
         append(`${cwd} $ ${next}\n[ShipSeal] ${nextPreview.decision.reason}\n`);
+        remember(next);
         return;
       }
       if (nextPreview.decision.requiresSeal) {
@@ -72,7 +140,7 @@ export function LiveTerminal({ workspace }: { workspace?: string }) {
     if (!preview?.approval) return;
     const commandToRun = command.trim();
     try {
-      await api.approveCommand(preview.approval);
+      await api.approveCommand(sessionId.current, preview.approval);
       setCommand("");
       await execute(commandToRun, preview.approval.id);
     } catch (error) {
@@ -81,11 +149,53 @@ export function LiveTerminal({ workspace }: { workspace?: string }) {
     }
   }
 
+  function handleInputKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "l") {
+      event.preventDefault();
+      setOutput("");
+      return;
+    }
+    if (event.ctrlKey && event.key.toLowerCase() === "c") {
+      if (running && abortRef.current) {
+        event.preventDefault();
+        abortRef.current.abort();
+      }
+      return;
+    }
+    if (event.key === "Escape" && preview) {
+      event.preventDefault();
+      setPreview(null);
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      if (!history.length) return;
+      event.preventDefault();
+      const nextIndex = historyIndex === null ? history.length - 1 : Math.max(0, historyIndex - 1);
+      if (historyIndex === null) setHistoryDraft(command);
+      setHistoryIndex(nextIndex);
+      setCommand(history[nextIndex]);
+      setPreview(null);
+      return;
+    }
+    if (event.key === "ArrowDown" && historyIndex !== null) {
+      event.preventDefault();
+      if (historyIndex >= history.length - 1) {
+        setHistoryIndex(null);
+        setCommand(historyDraft);
+      } else {
+        const nextIndex = historyIndex + 1;
+        setHistoryIndex(nextIndex);
+        setCommand(history[nextIndex]);
+      }
+      setPreview(null);
+    }
+  }
+
   const risk = preview?.decision.risk;
   const terminalStatus = running ? "EJECUTANDO" : preview ? "SHIPSEAL PENDIENTE" : "VIVA";
 
   return (
-    <section className="terminal-panel live-terminal">
+    <section className={`terminal-panel live-terminal ${focused ? "module-selected" : ""}`} onMouseDown={onSelect} data-module="terminal">
       <div className="terminal-title">
         <TerminalSquare size={15} />
         <span>TERMINAL // {workspace ?? "conectando"} // {cwd}</span>
@@ -99,7 +209,7 @@ export function LiveTerminal({ workspace }: { workspace?: string }) {
         <div>
           <strong>{risk === "external" ? "MANIOBRA EXTERNA" : "MANIOBRA CON CAMBIOS"}</strong>
           <span>{preview.decision.reason}</span>
-          <code>{cwd} $ {command}</code>
+          <code>{preview.cwd} $ {command}</code>
           <small>Sello de un solo uso · expira {new Date(preview.approval.expiresAt).toLocaleTimeString()}</small>
         </div>
         <button className="seal-approve" onClick={approveAndRun} disabled={running}>Sellar y ejecutar</button>
@@ -109,15 +219,17 @@ export function LiveTerminal({ workspace }: { workspace?: string }) {
       <form onSubmit={submit}>
         <span>{cwd} $</span>
         <input
+          ref={inputRef}
           value={command}
-          onChange={(event) => { setCommand(event.target.value); if (preview) setPreview(null); }}
+          onChange={(event) => { setCommand(event.target.value); setHistoryIndex(null); if (preview) setPreview(null); }}
+          onKeyDown={handleInputKeyDown}
           aria-label="Comando de terminal"
           autoComplete="off"
           spellCheck={false}
-          disabled={running}
+          disabled={false}
           placeholder="git status, npm run build, cd src…"
         />
-        <button disabled={running || !command.trim()}>{running ? "Corriendo…" : "Ejecutar"}</button>
+        <button disabled={running || !command.trim()}>{running ? "Ctrl+C" : "Ejecutar"}</button>
       </form>
     </section>
   );
