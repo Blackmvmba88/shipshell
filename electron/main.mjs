@@ -32,6 +32,83 @@ function publishState() {
   });
 }
 
+function activeTab() {
+  return activeTabId ? tabs.get(activeTabId) : undefined;
+}
+
+function activeContents() {
+  return activeTab()?.view.webContents;
+}
+
+async function applyAnnotationMode(contents, mode) {
+  if (!contents || contents.isDestroyed()) return { mode: "off", anchors: [] };
+  const nextMode = annotationModes.has(mode) ? mode : "off";
+  return contents.executeJavaScript(annotationBootstrap(nextMode), true);
+}
+
+async function readVisualAnchors(contents) {
+  if (!contents || contents.isDestroyed()) return [];
+  return contents.executeJavaScript(
+    `(() => window.__shipshellVisualAnchorsV2?.exportAnchors?.() || [])()`,
+    true,
+  ).catch(() => []);
+}
+
+async function snapshotTabAnchors(tab) {
+  if (!tab?.view?.webContents || tab.view.webContents.isDestroyed()) return [];
+  const snapshotUrl = tab.url;
+  const anchors = await readVisualAnchors(tab.view.webContents);
+  if (anchors.length) tab.anchorSnapshots.set(snapshotUrl, anchors);
+  else tab.anchorSnapshots.delete(snapshotUrl);
+  return anchors;
+}
+
+async function restoreTabAnchors(tab) {
+  if (!tab?.view?.webContents || tab.view.webContents.isDestroyed()) return [];
+  await applyAnnotationMode(tab.view.webContents, annotationMode);
+  const saved = tab.anchorSnapshots.get(tab.url);
+  if (!saved?.length) return [];
+  return tab.view.webContents.executeJavaScript(`(() => {
+    const state = window.__shipshellVisualAnchorsV2;
+    return state?.restore?.(${JSON.stringify(saved)}) || [];
+  })()`, true).catch(() => []);
+}
+
+async function clearVisualAnchors(tab) {
+  if (!tab?.view?.webContents || tab.view.webContents.isDestroyed()) return [];
+  const anchors = await tab.view.webContents.executeJavaScript(`(() => {
+    const state = window.__shipshellVisualAnchorsV2;
+    if (!state) return [];
+    state.clear();
+    return state.exportAnchors();
+  })()`, true).catch(() => []);
+  tab.anchorSnapshots.delete(tab.url);
+  return anchors;
+}
+
+async function setVisualAnchorNote(tab, number, note) {
+  if (!tab?.view?.webContents || tab.view.webContents.isDestroyed()) return [];
+  const safeNumber = Number(number);
+  const safeNote = String(note || "").slice(0, 500);
+  const anchors = await tab.view.webContents.executeJavaScript(`(() => {
+    const state = window.__shipshellVisualAnchorsV2;
+    return state?.setNote?.(${JSON.stringify(safeNumber)}, ${JSON.stringify(safeNote)}) || [];
+  })()`, true).catch(() => []);
+  if (anchors.length) tab.anchorSnapshots.set(tab.url, anchors);
+  return anchors;
+}
+
+async function focusVisualAnchors(tab, numbers) {
+  if (!tab?.view?.webContents || tab.view.webContents.isDestroyed()) return { focused: [], anchors: [] };
+  const safeNumbers = Array.isArray(numbers)
+    ? numbers.map(Number).filter((value) => Number.isInteger(value) && value >= 1 && value <= 24).slice(0, 24)
+    : [];
+  return tab.view.webContents.executeJavaScript(`(() => {
+    const state = window.__shipshellVisualAnchorsV2;
+    return state?.focus?.(${JSON.stringify(safeNumbers)}) || { focused: [], anchors: [] };
+  })()`, true).catch(() => ({ focused: [], anchors: [] }));
+}
+
 function activateTab(id) {
   if (!tabs.has(id)) return;
   activeTabId = id;
@@ -39,7 +116,7 @@ function activateTab(id) {
     tab.view.setVisible(browserVisible && tab.id === id);
     if (tab.id === id) tab.view.setBounds(browserBounds);
   }
-  if (annotationMode !== "off") applyAnnotationMode(activeContents(), annotationMode).catch(() => undefined);
+  restoreTabAnchors(tabs.get(id)).catch(() => undefined);
   publishState();
 }
 
@@ -73,7 +150,7 @@ function createTab(requestedUrl) {
       safeDialogs: true,
     },
   });
-  const tab = { id, view, url, title: "Cargando…", loading: true };
+  const tab = { id, view, url, title: "Cargando…", loading: true, anchorSnapshots: new Map() };
   tabs.set(id, tab);
   shellWindow.contentView.addChildView(view);
   view.setBounds(browserBounds);
@@ -87,15 +164,17 @@ function createTab(requestedUrl) {
   view.webContents.on("did-stop-loading", () => {
     tab.loading = false;
     sync();
-    if (tab.id === activeTabId && annotationMode !== "off") {
-      applyAnnotationMode(view.webContents, annotationMode).catch(() => undefined);
-    }
+    if (tab.id === activeTabId) restoreTabAnchors(tab).catch(() => undefined);
   });
   view.webContents.on("page-title-updated", (_event, title) => { tab.title = title; publishState(); });
   view.webContents.on("did-navigate", sync);
   view.webContents.on("did-navigate-in-page", sync);
   view.webContents.on("will-navigate", (event, destination) => {
-    if (!isWebUrl(destination)) event.preventDefault();
+    if (!isWebUrl(destination)) {
+      event.preventDefault();
+      return;
+    }
+    snapshotTabAnchors(tab).catch(() => undefined);
   });
   view.webContents.setWindowOpenHandler(({ url: popupUrl }) => {
     if (isWebUrl(popupUrl)) createTab(popupUrl);
@@ -118,34 +197,6 @@ function closeTab(id) {
     activeTabId = next;
     if (next) activateTab(next); else publishState();
   }
-}
-
-function activeContents() {
-  return activeTabId ? tabs.get(activeTabId)?.view.webContents : undefined;
-}
-
-async function applyAnnotationMode(contents, mode) {
-  if (!contents || contents.isDestroyed()) return { mode: "off", anchors: [] };
-  const nextMode = annotationModes.has(mode) ? mode : "off";
-  return contents.executeJavaScript(annotationBootstrap(nextMode), true);
-}
-
-async function clearVisualAnchors(contents) {
-  if (!contents || contents.isDestroyed()) return [];
-  return contents.executeJavaScript(`(() => {
-    const state = window.__shipshellVisualAnchorsV1;
-    if (!state) return [];
-    state.clear();
-    return state.exportAnchors();
-  })()`, true).catch(() => []);
-}
-
-async function readVisualAnchors(contents) {
-  if (!contents || contents.isDestroyed()) return [];
-  return contents.executeJavaScript(
-    `(() => window.__shipshellVisualAnchorsV1?.exportAnchors?.() || [])()`,
-    true,
-  ).catch(() => []);
 }
 
 async function captureActivePageVisual(contents) {
@@ -195,8 +246,9 @@ async function captureActivePageVisual(contents) {
 }
 
 async function readActivePageContext({ includeVisual = false } = {}) {
-  const contents = activeContents();
-  if (!contents || contents.isDestroyed()) {
+  const tab = activeTab();
+  const contents = tab?.view.webContents;
+  if (!tab || !contents || contents.isDestroyed()) {
     return { available: false, title: "", url: "", selection: "", text: "", anchors: [] };
   }
 
@@ -229,6 +281,8 @@ async function readActivePageContext({ includeVisual = false } = {}) {
     readVisualAnchors(contents),
     includeVisual ? captureActivePageVisual(contents) : Promise.resolve(undefined),
   ]);
+  if (anchors.length) tab.anchorSnapshots.set(tab.url, anchors);
+
   return {
     available: true,
     title: title.slice(0, 500),
@@ -242,24 +296,38 @@ async function readActivePageContext({ includeVisual = false } = {}) {
 }
 
 function registerIpc() {
-  ipcMain.handle("browser:navigate", (_event, url) => {
-    const contents = activeContents();
-    if (!contents) return createTab(url);
-    contents.loadURL(normalizeUrl(url));
+  ipcMain.handle("browser:navigate", async (_event, url) => {
+    const tab = activeTab();
+    if (!tab) return createTab(url);
+    await snapshotTabAnchors(tab);
+    tab.view.webContents.loadURL(normalizeUrl(url));
     return true;
   });
   ipcMain.handle("browser:new-tab", (_event, url) => createTab(url));
   ipcMain.handle("browser:select-tab", (_event, id) => activateTab(id));
   ipcMain.handle("browser:close-tab", (_event, id) => closeTab(id));
-  ipcMain.handle("browser:back", () => {
-    const contents = activeContents();
-    if (contents?.navigationHistory.canGoBack()) contents.navigationHistory.goBack();
+  ipcMain.handle("browser:back", async () => {
+    const tab = activeTab();
+    const contents = tab?.view.webContents;
+    if (tab && contents?.navigationHistory.canGoBack()) {
+      await snapshotTabAnchors(tab);
+      contents.navigationHistory.goBack();
+    }
   });
-  ipcMain.handle("browser:forward", () => {
-    const contents = activeContents();
-    if (contents?.navigationHistory.canGoForward()) contents.navigationHistory.goForward();
+  ipcMain.handle("browser:forward", async () => {
+    const tab = activeTab();
+    const contents = tab?.view.webContents;
+    if (tab && contents?.navigationHistory.canGoForward()) {
+      await snapshotTabAnchors(tab);
+      contents.navigationHistory.goForward();
+    }
   });
-  ipcMain.handle("browser:reload", () => activeContents()?.reload());
+  ipcMain.handle("browser:reload", async () => {
+    const tab = activeTab();
+    if (!tab) return;
+    await snapshotTabAnchors(tab);
+    tab.view.webContents.reload();
+  });
   ipcMain.handle("browser:get-context", (_event, options) =>
     readActivePageContext({ includeVisual: Boolean(options?.includeVisual) }),
   );
@@ -267,8 +335,14 @@ function registerIpc() {
     annotationMode = annotationModes.has(mode) ? mode : "off";
     return applyAnnotationMode(activeContents(), annotationMode);
   });
-  ipcMain.handle("browser:clear-annotations", () => clearVisualAnchors(activeContents()));
-  ipcMain.handle("browser:get-annotations", () => readVisualAnchors(activeContents()));
+  ipcMain.handle("browser:clear-annotations", () => clearVisualAnchors(activeTab()));
+  ipcMain.handle("browser:get-annotations", () => snapshotTabAnchors(activeTab()));
+  ipcMain.handle("browser:set-annotation-note", (_event, number, note) =>
+    setVisualAnchorNote(activeTab(), number, note),
+  );
+  ipcMain.handle("browser:focus-annotations", (_event, numbers) =>
+    focusVisualAnchors(activeTab(), numbers),
+  );
   ipcMain.on("browser:set-bounds", (_event, nextBounds) => {
     const windowBounds = shellWindow?.getContentBounds();
     if (!windowBounds) return;

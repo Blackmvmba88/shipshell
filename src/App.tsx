@@ -57,6 +57,16 @@ function isDeckId(value: string | undefined): value is DeckId {
   return value === "browser" || value === "marketing" || value === "logbook";
 }
 
+function anchorNumbersFromAnswer(text: string) {
+  const found = new Set<number>();
+  const pattern = /\b(?:ancla|anchor)\s*#?\s*(\d{1,2})\b/gi;
+  for (const match of text.matchAll(pattern)) {
+    const number = Number(match[1]);
+    if (Number.isInteger(number) && number >= 1 && number <= 24) found.add(number);
+  }
+  return [...found];
+}
+
 function restoreWorkspace() {
   const checkpoint = readWorkspaceCheckpoint();
   const storedUniverse = readStoredUniverse();
@@ -131,6 +141,20 @@ function App() {
   });
 
   useEffect(() => {
+    const handleAskAnchors = (event: Event) => {
+      const numbers = (event as CustomEvent<{ numbers?: number[] }>).detail?.numbers
+        ?.map(Number)
+        .filter((value) => Number.isInteger(value) && value >= 1 && value <= 24) ?? [];
+      if (!numbers.length || busy) return;
+      setActiveModule("copilot");
+      const labels = numbers.map((number) => `Ancla ${number}`).join(", ");
+      void runMission(`Compara ${labels}. Usa sus notas y contexto visual/semántico, explica las diferencias importantes y recomienda sólo si hay evidencia suficiente.`, true);
+    };
+    window.addEventListener("shipshell:ask-anchors", handleAskAnchors);
+    return () => window.removeEventListener("shipshell:ask-anchors", handleAskAnchors);
+  });
+
+  useEffect(() => {
     if (!nativeBrowser) return;
     const browserVisible = activeDeck === "browser" && Boolean(browserSlot) && expandedModule !== "terminal" && expandedModule !== "copilot" && expandedModule !== "logbook";
     nativeBrowser.setVisible(browserVisible);
@@ -186,7 +210,10 @@ function App() {
         await nativeBrowser?.navigate(result.decision.normalizedInput);
         setAnswer(`Ruta preparada: ${result.decision.normalizedInput}`);
       } else {
-        setAnswer(result.answer ?? "Misión procesada.");
+        const nextAnswer = result.answer ?? "Misión procesada.";
+        setAnswer(nextAnswer);
+        const referencedAnchors = anchorNumbersFromAnswer(nextAnswer);
+        if (referencedAnchors.length) await nativeBrowser?.focusAnnotations(referencedAnchors);
       }
       await refresh();
     } catch (error) {
@@ -302,13 +329,14 @@ function App() {
               Contexto {contextEnabled ? "ON" : "OFF"}
             </button>
             {pageContext?.selection && <div className="selection-chip">Selección incluida</div>}
+            {pageContext?.anchors?.length ? <div className="selection-chip">{pageContext.anchors.length} anclas espaciales</div> : null}
           </div>
 
           <div className="copilot-quick-actions">
             {QUICK_COPILOT_PROMPTS.map((prompt) => <button key={prompt} disabled={busy || !activeTab || !contextEnabled} onClick={() => runMission(prompt, true)}>{prompt}</button>)}
           </div>
 
-          <div className="message copilot-message"><span>{pageContext?.available ? "CONTEXTO DE PÁGINA + RESPUESTA" : "COPILOTO"}</span><p>{answer}</p></div>
+          <div className="message copilot-message"><span>{pageContext?.available ? "CONTEXTO VIVO + RESPUESTA" : "COPILOTO"}</span><p>{answer}</p></div>
 
           <form className="copilot-form" onSubmit={submitCopilot}>
             <Sparkles size={16} />
@@ -316,7 +344,7 @@ function App() {
             <button disabled={busy || !copilotInput.trim()} aria-label="Preguntar al copiloto">{busy ? <Activity className="spin" size={16} /> : <Send size={16} />}</button>
           </form>
 
-          <div className="evidence"><CheckCircle2 /><div><strong>Copiloto, no piloto automático</strong><span>Puede ver, entender y proponer. Publicar, comprar, borrar, enviar o modificar cuentas sigue requiriendo ShipSeal.</span></div></div>
+          <div className="evidence"><CheckCircle2 /><div><strong>Copiloto, no piloto automático</strong><span>Puede ver, entender, señalar y proponer. Publicar, comprar, borrar, enviar o modificar cuentas sigue requiriendo ShipSeal.</span></div></div>
           <div className="mission-stats"><div><span>MISIONES</span><strong>{entries.filter((e) => e.event === "mission").length}</strong></div><div><span>BLOQUEOS</span><strong>{entries.filter((e) => e.status === "blocked").length}</strong></div></div>
         </aside>
 

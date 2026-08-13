@@ -1,7 +1,7 @@
 export const annotationModes = new Set(["off", "underline", "circle", "glow"]);
 
 function annotationClient(mode) {
-  const KEY = "__shipshellVisualAnchorsV1";
+  const KEY = "__shipshellVisualAnchorsV2";
   const ROOT_ID = "__shipshell-anchor-root";
   const STYLE_ID = "__shipshell-anchor-style";
   let state = window[KEY];
@@ -15,6 +15,49 @@ function annotationClient(mode) {
       width: Math.round(rect.width),
       height: Math.round(rect.height),
     };
+  };
+  const metadataOf = (element) => ({
+    text: compactText(element.innerText || element.textContent || element.getAttribute("value")),
+    tag: element.tagName.toLowerCase().slice(0, 40),
+    role: compactText(element.getAttribute("role"), 80),
+    ariaLabel: compactText(element.getAttribute("aria-label"), 300),
+    href: compactText(element instanceof HTMLAnchorElement ? element.href : "", 2000),
+    elementId: compactText(element.id, 200),
+    testId: compactText(element.getAttribute("data-testid") || element.getAttribute("data-test-id"), 200),
+    name: compactText(element.getAttribute("name"), 200),
+  });
+
+  const scoreCandidate = (element, anchor) => {
+    const meta = metadataOf(element);
+    let score = 0;
+    if (anchor.elementId && meta.elementId === anchor.elementId) score += 10;
+    if (anchor.testId && meta.testId === anchor.testId) score += 9;
+    if (anchor.name && meta.name === anchor.name) score += 6;
+    if (anchor.ariaLabel && meta.ariaLabel === anchor.ariaLabel) score += 6;
+    if (anchor.href && meta.href === anchor.href) score += 6;
+    if (anchor.text && meta.text === anchor.text) score += 5;
+    if (anchor.role && meta.role === anchor.role) score += 2;
+    if (anchor.tag && meta.tag === anchor.tag) score += 1;
+    return score;
+  };
+
+  const findElement = (anchor) => {
+    if (anchor.elementId) {
+      const byId = document.getElementById(anchor.elementId);
+      if (byId && scoreCandidate(byId, anchor) >= 6) return byId;
+    }
+    const tag = /^[a-z][a-z0-9-]*$/i.test(anchor.tag || "") ? anchor.tag : "*";
+    const candidates = Array.from(document.querySelectorAll(tag)).slice(0, 4000);
+    let best = null;
+    let bestScore = 0;
+    for (const candidate of candidates) {
+      const score = scoreCandidate(candidate, anchor);
+      if (score > bestScore) {
+        best = candidate;
+        bestScore = score;
+      }
+    }
+    return bestScore >= 6 ? best : null;
   };
 
   if (!state) {
@@ -45,7 +88,12 @@ function annotationClient(mode) {
     const elements = new Map();
     const exportAnchors = () => anchors.slice(-24).map((anchor) => {
       const element = elements.get(anchor.id);
-      return { ...anchor, rect: element?.isConnected ? rectOf(element) : anchor.rect };
+      const resolved = Boolean(element?.isConnected);
+      return {
+        ...anchor,
+        rect: resolved ? rectOf(element) : anchor.rect,
+        resolved,
+      };
     });
     const render = () => {
       root.replaceChildren();
@@ -57,6 +105,7 @@ function annotationClient(mode) {
         if (rect.width <= 0 || rect.height <= 0) return;
         const mark = document.createElement("div");
         mark.className = `ss-anchor ss-${anchor.kind}`;
+        mark.dataset.anchorNumber = String(index + 1);
         Object.assign(mark.style, {
           left: `${Math.max(0, rect.x - (anchor.kind === "circle" ? 6 : 3))}px`,
           top: `${Math.max(0, rect.y - (anchor.kind === "circle" ? 6 : 3))}px`,
@@ -75,6 +124,46 @@ function annotationClient(mode) {
       elements.clear();
       render();
     };
+    const restore = (saved) => {
+      anchors.splice(0);
+      elements.clear();
+      for (const raw of Array.isArray(saved) ? saved.slice(0, 24) : []) {
+        const anchor = {
+          ...raw,
+          note: compactText(raw?.note, 500),
+        };
+        anchors.push(anchor);
+        const element = findElement(anchor);
+        if (element) elements.set(anchor.id, element);
+      }
+      render();
+      return exportAnchors();
+    };
+    const setNote = (number, note) => {
+      const anchor = anchors[Number(number) - 1];
+      if (!anchor) return exportAnchors();
+      anchor.note = compactText(note, 500);
+      return exportAnchors();
+    };
+    const focus = (numbers) => {
+      render();
+      const requested = Array.isArray(numbers)
+        ? [...new Set(numbers.map(Number).filter((value) => Number.isInteger(value) && value >= 1 && value <= anchors.length))]
+        : [];
+      const focused = [];
+      for (const number of requested) {
+        const mark = root.querySelector(`[data-anchor-number="${number}"]`);
+        const element = elements.get(anchors[number - 1]?.id);
+        if (!mark || !element?.isConnected) continue;
+        focused.push(number);
+        mark.animate([
+          { opacity: 1, transform: "scale(1)", filter: "brightness(1)" },
+          { opacity: 1, transform: "scale(1.045)", filter: "brightness(1.9)" },
+          { opacity: 1, transform: "scale(1)", filter: "brightness(1)" },
+        ], { duration: 850, iterations: 2, easing: "ease-in-out" });
+      }
+      return { focused, anchors: exportAnchors() };
+    };
     const onClick = (event) => {
       if (!state || state.mode === "off") return;
       const target = event.target instanceof Element
@@ -87,11 +176,8 @@ function annotationClient(mode) {
       const anchor = {
         id,
         kind: state.mode,
-        text: compactText(target.innerText || target.textContent || target.getAttribute("value")),
-        tag: target.tagName.toLowerCase().slice(0, 40),
-        role: compactText(target.getAttribute("role"), 80),
-        ariaLabel: compactText(target.getAttribute("aria-label"), 300),
-        href: compactText(target instanceof HTMLAnchorElement ? target.href : "", 2000),
+        ...metadataOf(target),
+        note: "",
         rect: rectOf(target),
         createdAt: new Date().toISOString(),
       };
@@ -109,7 +195,7 @@ function annotationClient(mode) {
         render();
       }
     };
-    state = { mode: "off", anchors, elements, root, render, clear, exportAnchors, onClick, onKey };
+    state = { mode: "off", anchors, elements, root, render, clear, restore, setNote, focus, exportAnchors, onClick, onKey };
     window[KEY] = state;
     window.addEventListener("click", onClick, true);
     window.addEventListener("scroll", render, true);
