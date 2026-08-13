@@ -24,11 +24,15 @@ for (const file of [
   "electron/preload.cjs",
   "server/index.ts",
   "server/browser-context.ts",
+  "server/browser-context.test.ts",
   "server/copilot-profile.ts",
+  "server/mission-content.ts",
+  "server/mission-content.test.ts",
   "server/workspace-context.ts",
   "server/workspace-context.test.ts",
   "server/terminal-seal.ts",
   "src/App.tsx",
+  "src/AnnotationDock.tsx",
   "src/LiveTerminal.tsx",
   "src/api.ts",
   "src/semantic-context.ts",
@@ -36,6 +40,7 @@ for (const file of [
   "src/modules.test.ts",
   "src/update-plan.ts",
   "src/update-plan.test.ts",
+  "src/annotations.css",
   "src/modules.css",
   "src/terminal.css",
   "src/universes.ts",
@@ -54,7 +59,7 @@ const html = read("index.html");
 if (html.includes("default-src 'self'") && html.includes("object-src 'none'") && html.includes("frame-src 'none'")) ok("deck CSP baseline present");
 else fail("deck CSP baseline is incomplete");
 
-const styles = [read("src/styles.css"), read("src/universes.css"), read("src/terminal.css"), read("src/modules.css")].join("\n");
+const styles = [read("src/styles.css"), read("src/universes.css"), read("src/terminal.css"), read("src/modules.css"), read("src/annotations.css")].join("\n");
 if (!/https?:\/\//i.test(styles)) ok("stylesheets have no remote asset dependency"); else warn("a stylesheet references a remote asset");
 
 const universes = read("src/universes.ts");
@@ -82,20 +87,31 @@ if (updatePlan.includes('"hot"') && updatePlan.includes('"safe-handoff"') && upd
 const semanticClient = read("src/semantic-context.ts");
 const semanticServer = read("server/workspace-context.ts");
 const browserContext = read("server/browser-context.ts");
+const missionContent = read("server/mission-content.ts");
 const apiClient = read("src/api.ts");
 if (semanticClient.includes("publishTerminalContext") && semanticClient.includes("buildClientWorkspaceContext")) ok("client semantic context bus publishes terminal and workspace state"); else fail("client semantic context bus is incomplete");
 if (semanticServer.includes("WORKSPACE_CONTEXT_JSON") && semanticServer.includes("never instructions")) ok("server labels semantic context as reference data"); else fail("semantic context trust boundary missing");
 if (browserContext.includes("WORKSPACE_CONTEXT_JSON") && browserContext.includes("sin pedir capturas manuales")) ok("copilot prompt prefers semantic context over manual screenshots"); else fail("copilot semantic-context guidance missing");
-if (apiClient.includes("buildClientWorkspaceContext") && apiClient.includes("workspace: workspace ??")) ok("missions attach semantic workspace context automatically"); else fail("missions are not automatically attaching semantic context");
+if (browserContext.includes("visualAnchorSchema") && browserContext.includes("data:image/jpeg;base64") && browserContext.includes("visualAnchors")) ok("browser context validates bounded vision and semantic visual anchors"); else fail("browser visual-context boundary missing");
+if (missionContent.includes('type: "input_image"') && missionContent.includes('detail: "low"') && missionContent.includes("imageDataUrl")) ok("copilot mission content supports bounded low-detail automatic vision"); else fail("multimodal mission content wiring missing");
+if (apiClient.includes("buildClientWorkspaceContext") && apiClient.includes("workspace: workspace ??") && apiClient.includes("MissionVisualAnchor")) ok("missions attach semantic workspace and visual anchor context automatically"); else fail("missions are not automatically attaching semantic context");
 
 const app = read("src/App.tsx");
 if (app.includes("activeModule") && app.includes("expandedModule") && app.includes("moduleByShortcut")) ok("module selection, expansion, and keyboard focus are wired"); else fail("module focus system is incomplete");
+
+const annotationDock = read("src/AnnotationDock.tsx");
+if (annotationDock.includes('id: "underline"') && annotationDock.includes('id: "circle"') && annotationDock.includes('id: "glow"') && annotationDock.includes("clearAnnotations")) ok("visual anchors dock exposes underline, circle, glow, and clear tools"); else fail("visual anchors dock is incomplete");
 
 const server = read("server/index.ts");
 const guard = read("server/guard.ts");
 const terminalSeal = read("server/terminal-seal.ts");
 const liveTerminal = read("src/LiveTerminal.tsx");
+const main = read("electron/main.mjs");
+const preload = read("electron/preload.cjs");
 if (server.includes("buildWorkspaceContextBlock") && server.includes("semanticContextUsed") && server.includes("terminalContextUsed")) ok("server feeds and records semantic workspace context"); else fail("server semantic context wiring missing");
+if (server.includes("buildMissionContent") && server.includes("visualContextUsed") && server.includes('express.json({ limit: "1mb" })')) ok("server accepts bounded visual context and records vision usage"); else fail("server automatic vision wiring missing");
+if (main.includes("capturePage") && main.includes("targetBytes = 350_000") && main.includes("browser:set-annotation-mode") && main.includes("readVisualAnchors")) ok("electron captures bounded page vision and manages semantic visual anchors"); else fail("electron page vision or visual anchors wiring missing");
+if (preload.includes("setAnnotationMode") && preload.includes("clearAnnotations") && preload.includes("getAnnotations")) ok("preload exposes narrow visual-anchor controls"); else fail("visual-anchor preload bridge missing");
 if (liveTerminal.includes("publishTerminalContext") && liveTerminal.includes("output.slice(-8000)")) ok("terminal publishes bounded live semantic state"); else fail("terminal semantic publisher missing");
 if (server.includes("/api/terminal/run-stream") && server.includes("application/x-ndjson")) ok("live terminal streams process output"); else fail("live terminal streaming route missing");
 if (server.includes("terminalSessions = new Map") && server.includes("resolveTerminalDirectory") && server.includes("session.cwd")) ok("terminal cwd is session-aware and workspace-bounded"); else fail("terminal session cwd boundary missing");
@@ -109,10 +125,7 @@ if (liveTerminal.includes("Sellar y ejecutar") && liveTerminal.includes("runComm
 const gitignore = read(".gitignore");
 if (gitignore.includes(".env") && gitignore.includes(".shipshell/")) ok("secrets and runtime state are ignored"); else fail(".gitignore is missing secret/runtime exclusions");
 
-const preload = read("electron/preload.cjs");
 if (preload.includes("contextBridge.exposeInMainWorld") && !preload.includes("OPENAI_API_KEY")) ok("preload bridge is narrow and secret-free"); else fail("preload bridge boundary needs review");
-
-const main = read("electron/main.mjs");
 for (const boundary of ["nodeIntegration: false", "contextIsolation: true", "sandbox: true", "webSecurity: true"]) {
   if (main.includes(boundary)) ok(`browser boundary: ${boundary}`); else fail(`missing browser boundary: ${boundary}`);
 }
