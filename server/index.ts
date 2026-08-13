@@ -24,15 +24,40 @@ const port = Number(process.env.SHIPSHELL_PORT ?? 8787);
 const workspace = resolveWorkspace(root);
 const logbook = new Logbook(path.join(root, ".shipshell", "logbook.json"));
 const terminalSeals = new TerminalSealStore();
+const terminalSessions = new Map<string, { cwd: string; touchedAt: number }>();
 const client = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
-let terminalCwd = workspace;
 
 app.use(cors({ origin: ["http://127.0.0.1:5173", "http://localhost:5173"] }));
 app.use(express.json({ limit: "64kb" }));
 
-function displayCwd() {
-  const relative = path.relative(workspace, terminalCwd);
+function pruneTerminalSessions() {
+  const cutoff = Date.now() - 4 * 60 * 60_000;
+  for (const [id, session] of terminalSessions) {
+    if (session.touchedAt < cutoff) terminalSessions.delete(id);
+  }
+}
+
+function getTerminalSession(sessionId: string) {
+  pruneTerminalSessions();
+  const existing = terminalSessions.get(sessionId);
+  if (existing) {
+    existing.touchedAt = Date.now();
+    return existing;
+  }
+  const created = { cwd: workspace, touchedAt: Date.now() };
+  terminalSessions.set(sessionId, created);
+  return created;
+}
+
+function displayCwd(cwd: string) {
+  const relative = path.relative(workspace, cwd);
   return relative ? `./${relative}` : ".";
+}
+
+function terminalEnv() {
+  const env = { ...process.env };
+  for (const key of ["OPENAI_API_KEY", "NPM_TOKEN", "GITHUB_TOKEN", "GH_TOKEN"]) delete env[key];
+  return env;
 }
 
 app.get("/api/health", (_req, res) => {
@@ -109,46 +134,54 @@ app.post("/api/missions", async (req, res, next) => {
   }
 });
 
+const terminalSessionSchema = z.string().uuid();
 const terminalCommandSchema = z.object({
+  sessionId: terminalSessionSchema,
   command: z.string().trim().min(1).max(1000),
   sealId: z.string().uuid().optional(),
 });
 const terminalApprovalSchema = z.object({
+  sessionId: terminalSessionSchema,
   id: z.string().uuid(),
   fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
 });
 
-app.get("/api/terminal/state", (_req, res) => {
-  res.json({ cwd: displayCwd() });
+app.get("/api/terminal/state", (req, res) => {
+  const sessionId = terminalSessionSchema.parse(req.query.sessionId);
+  const session = getTerminalSession(sessionId);
+  res.json({ cwd: displayCwd(session.cwd) });
 });
 
 app.post("/api/terminal/preview", (req, res) => {
-  const { command } = terminalCommandSchema.pick({ command: true }).parse(req.body);
+  const { sessionId, command } = terminalCommandSchema.omit({ sealId: true }).parse(req.body);
+  const session = getTerminalSession(sessionId);
   const decision = reviewCommand(command);
   const approval = decision.allowed && decision.requiresSeal
-    ? terminalSeals.issue(command, terminalCwd, decision)
+    ? terminalSeals.issue(sessionId, command, session.cwd, decision)
     : undefined;
-  res.json({ decision, cwd: displayCwd(), approval });
+  res.json({ decision, cwd: displayCwd(session.cwd), approval });
 });
 
 app.post("/api/terminal/approve", (req, res) => {
-  const { id, fingerprint } = terminalApprovalSchema.parse(req.body);
-  if (!terminalSeals.approve(id, fingerprint)) {
-    return res.status(403).json({ error: "ShipSeal inválido, vencido o ya consumido." });
+  const { sessionId, id, fingerprint } = terminalApprovalSchema.parse(req.body);
+  if (!terminalSeals.approve(id, sessionId, fingerprint)) {
+    return res.status(403).json({ error: "ShipSeal inválido, vencido, de otra sesión o ya consumido." });
   }
   return res.json({ ok: true });
 });
 
 app.post("/api/terminal/run-stream", async (req, res, next) => {
   try {
-    const { command, sealId } = terminalCommandSchema.parse(req.body);
+    const { sessionId, command, sealId } = terminalCommandSchema.parse(req.body);
+    const session = getTerminalSession(sessionId);
     const decision = reviewCommand(command);
+
     if (!decision.allowed) {
-      await logbook.append({ event: "terminal", status: "blocked", summary: command, evidence: { decision, cwd: displayCwd() } });
+      await logbook.append({ event: "terminal", status: "blocked", summary: command, evidence: { decision, cwd: displayCwd(session.cwd), sessionId } });
       return res.status(403).json({ error: decision.reason, decision });
     }
-    if (!terminalSeals.consume(sealId, command, terminalCwd, decision)) {
-      await logbook.append({ event: "terminal", status: "blocked", summary: command, evidence: { decision, cwd: displayCwd(), reason: "seal-required" } });
+    if (!terminalSeals.consume(sealId, sessionId, command, session.cwd, decision)) {
+      await logbook.append({ event: "terminal", status: "blocked", summary: command, evidence: { decision, cwd: displayCwd(session.cwd), sessionId, reason: "seal-required" } });
       return res.status(403).json({ error: "Esta maniobra requiere un ShipSeal aprobado y de un solo uso.", decision });
     }
 
@@ -161,21 +194,21 @@ app.post("/api/terminal/run-stream", async (req, res, next) => {
       if (!res.writableEnded) res.write(`${JSON.stringify(payload)}\n`);
     };
 
-    emit({ type: "start", cwd: displayCwd(), decision });
+    emit({ type: "start", cwd: displayCwd(session.cwd), decision });
 
     if (decision.builtin === "clear") {
       emit({ type: "clear" });
-      emit({ type: "exit", exitCode: 0, cwd: displayCwd() });
+      emit({ type: "exit", exitCode: 0, cwd: displayCwd(session.cwd) });
       res.end();
-      await logbook.append({ event: "terminal", status: "completed", summary: command, evidence: { builtin: "clear", cwd: displayCwd() } });
+      await logbook.append({ event: "terminal", status: "completed", summary: command, evidence: { builtin: "clear", cwd: displayCwd(session.cwd), sessionId } });
       return;
     }
 
     if (decision.builtin === "cd") {
-      const next = resolveTerminalDirectory(workspace, terminalCwd, decision.args?.[0] ?? ".");
+      const next = resolveTerminalDirectory(workspace, session.cwd, decision.args?.[0] ?? ".");
       if (!next) {
         emit({ type: "stderr", data: "ShipSeal: no puedes salir del workspace.\n" });
-        emit({ type: "exit", exitCode: 1, cwd: displayCwd() });
+        emit({ type: "exit", exitCode: 1, cwd: displayCwd(session.cwd) });
         res.end();
         return;
       }
@@ -183,35 +216,30 @@ app.post("/api/terminal/run-stream", async (req, res, next) => {
         if (!statSync(next).isDirectory()) throw new Error("not-directory");
       } catch {
         emit({ type: "stderr", data: `cd: no existe un directorio válido: ${decision.args?.[0] ?? "."}\n` });
-        emit({ type: "exit", exitCode: 1, cwd: displayCwd() });
+        emit({ type: "exit", exitCode: 1, cwd: displayCwd(session.cwd) });
         res.end();
         return;
       }
-      terminalCwd = next;
-      emit({ type: "cwd", cwd: displayCwd() });
-      emit({ type: "exit", exitCode: 0, cwd: displayCwd() });
+      session.cwd = next;
+      session.touchedAt = Date.now();
+      emit({ type: "cwd", cwd: displayCwd(session.cwd) });
+      emit({ type: "exit", exitCode: 0, cwd: displayCwd(session.cwd) });
       res.end();
-      await logbook.append({ event: "terminal", status: "completed", summary: command, evidence: { builtin: "cd", cwd: displayCwd() } });
+      await logbook.append({ event: "terminal", status: "completed", summary: command, evidence: { builtin: "cd", cwd: displayCwd(session.cwd), sessionId } });
       return;
     }
 
     if (!decision.executable) {
       emit({ type: "stderr", data: "No hay ejecutable asociado a esta maniobra.\n" });
-      emit({ type: "exit", exitCode: 1, cwd: displayCwd() });
+      emit({ type: "exit", exitCode: 1, cwd: displayCwd(session.cwd) });
       res.end();
       return;
     }
 
     const child = spawn(decision.executable, decision.args ?? [], {
-      cwd: terminalCwd,
+      cwd: session.cwd,
       shell: false,
-      env: {
-        ...process.env,
-        OPENAI_API_KEY: undefined,
-        NPM_TOKEN: undefined,
-        GITHUB_TOKEN: undefined,
-        GH_TOKEN: undefined,
-      },
+      env: terminalEnv(),
     });
 
     let outputBytes = 0;
@@ -236,24 +264,25 @@ app.post("/api/terminal/run-stream", async (req, res, next) => {
       settled = true;
       clearTimeout(timer);
       emit({ type: "error", message: error.message });
-      emit({ type: "exit", exitCode: 1, cwd: displayCwd() });
+      emit({ type: "exit", exitCode: 1, cwd: displayCwd(session.cwd) });
       res.end();
     });
-    child.on("close", async (exitCode) => {
+    child.on("close", async (exitCode, signal) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      emit({ type: "exit", exitCode, cwd: displayCwd() });
+      if (signal) emit({ type: "stderr", data: `\n[ShipShell] proceso detenido por ${signal}.\n` });
+      emit({ type: "exit", exitCode, cwd: displayCwd(session.cwd) });
       res.end();
       await logbook.append({
         event: "terminal",
         status: exitCode === 0 ? "completed" : "failed",
         summary: command,
-        evidence: { exitCode, risk: decision.risk, sealed: decision.requiresSeal, cwd: displayCwd() },
+        evidence: { exitCode, signal, risk: decision.risk, sealed: decision.requiresSeal, cwd: displayCwd(session.cwd), sessionId },
       });
     });
-    req.on("close", () => {
-      if (!settled && !child.killed) child.kill("SIGTERM");
+    res.on("close", () => {
+      if (!settled && !child.killed) child.kill("SIGINT");
     });
   } catch (error) {
     next(error);
