@@ -12,6 +12,7 @@ import {
   Eye,
   EyeOff,
   Globe2,
+  Layers3,
   Megaphone,
   Plus,
   Radio,
@@ -23,7 +24,9 @@ import {
   X,
 } from "lucide-react";
 import { api, type Health, type LogEntry } from "./api";
+import { applyUniverse, readStoredUniverse, UNIVERSES, type Universe } from "./universes";
 import "./copilot.css";
+import "./universes.css";
 
 const PORTS = [
   ["Sitio oficial", "https://blackmamba.world", "BM"],
@@ -52,6 +55,7 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [contextEnabled, setContextEnabled] = useState(true);
   const [pageContext, setPageContext] = useState<ShipShellPageContext | null>(null);
+  const [universe, setUniverse] = useState<Universe>(() => readStoredUniverse());
   const [activeDeck, setActiveDeck] = useState<"browser" | "marketing" | "logbook">("browser");
   const [browserState, setBrowserState] = useState<ShipShellBrowserState>({ activeTabId: null, tabs: [] });
   const [browserSlot, setBrowserSlot] = useState<HTMLDivElement | null>(null);
@@ -70,6 +74,10 @@ function App() {
 
   useEffect(() => { refresh().catch(() => undefined); }, []);
 
+  useEffect(() => {
+    applyUniverse(universe);
+  }, [universe]);
+
   useEffect(() => nativeBrowser?.onState(setBrowserState), [nativeBrowser]);
 
   useEffect(() => { setPageContext(null); }, [browserState.activeTabId]);
@@ -87,7 +95,7 @@ function App() {
     window.addEventListener("resize", updateBounds);
     updateBounds();
     return () => { observer.disconnect(); window.removeEventListener("resize", updateBounds); };
-  }, [nativeBrowser, browserSlot, activeDeck]);
+  }, [nativeBrowser, browserSlot, activeDeck, universe.id]);
 
   const status = useMemo(() => health?.aiConfigured ? "COPILOTO EN LÍNEA" : "MODO LOCAL", [health]);
 
@@ -155,6 +163,8 @@ function App() {
 
   return (
     <div className="app-shell">
+      <div className="universe-stage" aria-hidden="true" />
+
       <header className="topbar">
         <div className="brand"><div className="mark">S</div><div><strong>BLACKMAMBA</strong><span>SHIPSHELL</span></div></div>
         <form className="radar" onSubmit={submitMission}>
@@ -162,7 +172,7 @@ function App() {
           <input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Busca o escribe una URL…" aria-label="Radar inteligente" />
           <button disabled={busy} aria-label="Iniciar misión">{busy ? <Activity className="spin" size={17} /> : <Send size={17} />}</button>
         </form>
-        <div className="system-status"><span className="pulse" />{status}</div>
+        <div className="system-status"><span className="pulse" />{status} · {universe.workMode.toUpperCase()}</div>
       </header>
 
       <aside className="rail">
@@ -209,6 +219,19 @@ function App() {
 
         <aside className="crew-panel copilot-panel">
           <div className="crew-title copilot-title"><Bot /><div><span>COPILOTO</span><strong>ShipShell Copilot</strong></div><span className="pulse" /></div>
+
+          <section className="universe-switcher" aria-label="Universo de ShipShell">
+            <div className="universe-switcher-head"><div><span>UNIVERSO</span><strong>{universe.name}</strong></div><Layers3 size={16} /></div>
+            <select value={universe.id} onChange={(event) => setUniverse(UNIVERSES.find((item) => item.id === event.target.value) ?? universe)} aria-label="Cambiar universo">
+              {UNIVERSES.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+            <div className="universe-meta">
+              <div><span>Modo</span><strong>{universe.workMode}</strong></div>
+              <div><span>Voz</span><strong>{universe.voice}</strong></div>
+              <div><span>Atmósfera</span><strong>{universe.shader}</strong></div>
+            </div>
+            <p className="universe-description">{universe.description}</p>
+          </section>
 
           <div className="copilot-context-card">
             <div className="context-source">
