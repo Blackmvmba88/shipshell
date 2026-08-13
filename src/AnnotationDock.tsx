@@ -21,16 +21,17 @@ export function AnnotationDock() {
   }, [browser, mode]);
 
   if (!browser) return null;
+  const bridge = browser;
 
   async function select(next: ShipShellAnnotationMode) {
     const resolved = mode === next ? "off" : next;
-    const state = await browser.setAnnotationMode(resolved);
+    const state = await bridge.setAnnotationMode(resolved);
     setMode(state.mode);
     setCount(state.anchors.length);
   }
 
   async function clear() {
-    const anchors = await browser.clearAnnotations();
+    const anchors = await bridge.clearAnnotations();
     setCount(anchors.length);
   }
 
