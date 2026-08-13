@@ -9,18 +9,21 @@ import {
   CheckCircle2,
   Compass,
   ExternalLink,
+  Eye,
+  EyeOff,
   Globe2,
   Megaphone,
+  Plus,
   Radio,
-  Search,
+  RotateCw,
   Send,
   ShieldCheck,
+  Sparkles,
   TerminalSquare,
-  Plus,
-  RotateCw,
   X,
 } from "lucide-react";
 import { api, type Health, type LogEntry } from "./api";
+import "./copilot.css";
 
 const PORTS = [
   ["Sitio oficial", "https://blackmamba.world", "BM"],
@@ -31,19 +34,33 @@ const PORTS = [
   ["Instagram", "https://instagram.com", "IG"],
 ] as const;
 
+const QUICK_COPILOT_PROMPTS = [
+  "Resume esta página",
+  "¿Qué es lo importante aquí?",
+  "Explícame lo que estoy viendo",
+] as const;
+
 function App() {
   const [health, setHealth] = useState<Health | null>(null);
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [input, setInput] = useState("");
-  const [answer, setAnswer] = useState("Tripulación en cubierta. Define una misión o abre un puerto.");
+  const [copilotInput, setCopilotInput] = useState("");
+  const [answer, setAnswer] = useState("Voy contigo. Abre una página y pregúntame lo que quieras sobre ella.");
   const [url, setUrl] = useState("shipshell://home");
   const [command, setCommand] = useState("git status");
   const [terminal, setTerminal] = useState("$ ShipShell terminal seguro\n$ Sólo maniobras de lectura durante el MVP.\n");
   const [busy, setBusy] = useState(false);
+  const [contextEnabled, setContextEnabled] = useState(true);
+  const [pageContext, setPageContext] = useState<ShipShellPageContext | null>(null);
   const [activeDeck, setActiveDeck] = useState<"browser" | "marketing" | "logbook">("browser");
   const [browserState, setBrowserState] = useState<ShipShellBrowserState>({ activeTabId: null, tabs: [] });
   const [browserSlot, setBrowserSlot] = useState<HTMLDivElement | null>(null);
   const nativeBrowser = window.shipShellBrowser;
+
+  const activeTab = useMemo(
+    () => browserState.tabs.find((tab) => tab.id === browserState.activeTabId) ?? null,
+    [browserState],
+  );
 
   const refresh = async () => {
     const [nextHealth, nextLog] = await Promise.all([api.health(), api.logbook()]);
@@ -54,6 +71,8 @@ function App() {
   useEffect(() => { refresh().catch(() => undefined); }, []);
 
   useEffect(() => nativeBrowser?.onState(setBrowserState), [nativeBrowser]);
+
+  useEffect(() => { setPageContext(null); }, [browserState.activeTabId]);
 
   useEffect(() => {
     if (!nativeBrowser) return;
@@ -70,14 +89,21 @@ function App() {
     return () => { observer.disconnect(); window.removeEventListener("resize", updateBounds); };
   }, [nativeBrowser, browserSlot, activeDeck]);
 
-  const status = useMemo(() => health?.aiConfigured ? "TRIPULACIÓN EN LÍNEA" : "MODO LOCAL", [health]);
+  const status = useMemo(() => health?.aiConfigured ? "COPILOTO EN LÍNEA" : "MODO LOCAL", [health]);
 
-  async function submitMission(event: FormEvent) {
-    event.preventDefault();
-    if (!input.trim()) return;
+  async function runMission(rawInput: string, includePageContext: boolean) {
+    const cleanInput = rawInput.trim();
+    if (!cleanInput) return;
     setBusy(true);
     try {
-      const result = await api.mission(input);
+      let context: ShipShellPageContext | undefined;
+      if (includePageContext && contextEnabled && nativeBrowser && activeTab) {
+        const snapshot = await nativeBrowser.getPageContext();
+        setPageContext(snapshot);
+        if (snapshot.available) context = snapshot;
+      }
+
+      const result = await api.mission(cleanInput, context);
       if (result.decision.kind === "navigate") {
         setUrl(result.decision.normalizedInput);
         setActiveDeck("browser");
@@ -86,13 +112,26 @@ function App() {
       } else {
         setAnswer(result.answer ?? "Misión procesada.");
       }
-      setInput("");
       await refresh();
     } catch (error) {
       setAnswer(error instanceof Error ? error.message : "No pude completar la misión.");
     } finally {
       setBusy(false);
     }
+  }
+
+  async function submitMission(event: FormEvent) {
+    event.preventDefault();
+    const mission = input;
+    setInput("");
+    await runMission(mission, false);
+  }
+
+  async function submitCopilot(event: FormEvent) {
+    event.preventDefault();
+    const mission = copilotInput;
+    setCopilotInput("");
+    await runMission(mission, true);
   }
 
   function openPort(href: string) {
@@ -120,7 +159,7 @@ function App() {
         <div className="brand"><div className="mark">S</div><div><strong>BLACKMAMBA</strong><span>SHIPSHELL</span></div></div>
         <form className="radar" onSubmit={submitMission}>
           <Radio size={16} />
-          <input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Busca, pregunta o escribe una URL…" aria-label="Radar inteligente" />
+          <input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Busca o escribe una URL…" aria-label="Radar inteligente" />
           <button disabled={busy} aria-label="Iniciar misión">{busy ? <Activity className="spin" size={17} /> : <Send size={17} />}</button>
         </form>
         <div className="system-status"><span className="pulse" />{status}</div>
@@ -149,15 +188,15 @@ function App() {
                 <button className="new-tab" onClick={() => nativeBrowser.newTab("https://www.google.com")}><Plus size={14} /></button>
               </div>}
               <div className="browser-toolbar">
-                {nativeBrowser && <><button onClick={() => nativeBrowser.back()} disabled={!browserState.tabs.find((tab) => tab.id === browserState.activeTabId)?.canGoBack}><ArrowLeft size={14} /></button><button onClick={() => nativeBrowser.forward()} disabled={!browserState.tabs.find((tab) => tab.id === browserState.activeTabId)?.canGoForward}><ArrowRight size={14} /></button><button onClick={() => nativeBrowser.reload()}><RotateCw size={13} /></button></>}
-                <Globe2 size={15} /><span>{browserState.tabs.find((tab) => tab.id === browserState.activeTabId)?.url ?? url}</span>{!nativeBrowser && url.startsWith("http") && <a href={url} target="_blank" rel="noreferrer" aria-label="Abrir en navegador"><ExternalLink size={15} /></a>}
+                {nativeBrowser && <><button onClick={() => nativeBrowser.back()} disabled={!activeTab?.canGoBack}><ArrowLeft size={14} /></button><button onClick={() => nativeBrowser.forward()} disabled={!activeTab?.canGoForward}><ArrowRight size={14} /></button><button onClick={() => nativeBrowser.reload()}><RotateCw size={13} /></button></>}
+                <Globe2 size={15} /><span>{activeTab?.url ?? url}</span>{!nativeBrowser && url.startsWith("http") && <a href={url} target="_blank" rel="noreferrer" aria-label="Abrir en navegador"><ExternalLink size={15} /></a>}
               </div>
               {nativeBrowser && browserState.tabs.length > 0 ? <div className="native-browser-slot" ref={setBrowserSlot} /> : url === "shipshell://home" ? <div className="ship-home">
                 <div className="horizon" />
                 <Anchor />
                 <span>BLACKMAMBA // SHIPSHELL</span>
-                <h2>Tu internet.<br />Tu tripulación al lado.</h2>
-                <p>Escribe una misión en el Radar o abre uno de tus Puertos para comenzar la travesía.</p>
+                <h2>Tu internet.<br />Tu copiloto al lado.</h2>
+                <p>Abre una página. ShipShell Copilot se queda contigo mientras navegas y usa el contexto sólo cuando tú lo permites.</p>
                 <div><ShieldCheck size={14} /> Navegación bajo ShipSeal</div>
               </div> : <div className="web-preview"><Globe2 /><h3>La navegación real vive en ShipShell Desktop</h3><p>Ejecuta <code>npm run desktop:dev</code> para abrir páginas completas dentro del navegador propio.</p><a href={url} target="_blank" rel="noreferrer">Abrir temporalmente ↗</a></div>}
             </div>
@@ -168,10 +207,34 @@ function App() {
           {activeDeck === "logbook" && <div className="log-list">{entries.length ? entries.map((entry) => <article key={entry.id}><span className={`log-dot ${entry.status}`} /><div><strong>{entry.summary}</strong><small>{entry.event.toUpperCase()} · {new Date(entry.createdAt).toLocaleString()}</small></div></article>) : <div className="empty-state"><BookOpen /><h2>Bitácora limpia</h2><p>Las misiones y maniobras verificables aparecerán aquí.</p></div>}</div>}
         </section>
 
-        <aside className="crew-panel">
-          <div className="crew-title"><Bot /><div><span>TRIPULACIÓN</span><strong>Xarvis Navigator</strong></div><span className="pulse" /></div>
-          <div className="message"><span>REPORTE DE CUBIERTA</span><p>{answer}</p></div>
-          <div className="evidence"><CheckCircle2 /><div><strong>Respuesta separada de acciones</strong><span>Ninguna publicación o compra se ejecuta sin ShipSeal.</span></div></div>
+        <aside className="crew-panel copilot-panel">
+          <div className="crew-title copilot-title"><Bot /><div><span>COPILOTO</span><strong>ShipShell Copilot</strong></div><span className="pulse" /></div>
+
+          <div className="copilot-context-card">
+            <div className="context-source">
+              <Globe2 size={16} />
+              <div><span>PÁGINA ACTIVA</span><strong>{activeTab?.title ?? "Sin pestaña activa"}</strong><small>{activeTab?.url ?? "Abre un puerto para navegar"}</small></div>
+            </div>
+            <button className={`context-toggle ${contextEnabled ? "on" : ""}`} onClick={() => setContextEnabled((enabled) => !enabled)} title="Controlar si el copiloto puede leer una instantánea de la pestaña al preguntar">
+              {contextEnabled ? <Eye size={14} /> : <EyeOff size={14} />}
+              Contexto {contextEnabled ? "ON" : "OFF"}
+            </button>
+            {pageContext?.selection && <div className="selection-chip">Selección incluida</div>}
+          </div>
+
+          <div className="copilot-quick-actions">
+            {QUICK_COPILOT_PROMPTS.map((prompt) => <button key={prompt} disabled={busy || !activeTab || !contextEnabled} onClick={() => runMission(prompt, true)}>{prompt}</button>)}
+          </div>
+
+          <div className="message copilot-message"><span>{pageContext?.available ? "CONTEXTO DE PÁGINA + RESPUESTA" : "COPILOTO"}</span><p>{answer}</p></div>
+
+          <form className="copilot-form" onSubmit={submitCopilot}>
+            <Sparkles size={16} />
+            <textarea value={copilotInput} onChange={(event) => setCopilotInput(event.target.value)} placeholder="Pregúntame sobre esta página…" aria-label="Preguntar al copiloto" rows={3} />
+            <button disabled={busy || !copilotInput.trim()} aria-label="Preguntar al copiloto">{busy ? <Activity className="spin" size={16} /> : <Send size={16} />}</button>
+          </form>
+
+          <div className="evidence"><CheckCircle2 /><div><strong>Copiloto, no piloto automático</strong><span>Puede ver, entender y proponer. Publicar, comprar, borrar, enviar o modificar cuentas sigue requiriendo ShipSeal.</span></div></div>
           <div className="mission-stats"><div><span>MISIONES</span><strong>{entries.filter((e) => e.event === "mission").length}</strong></div><div><span>BLOQUEOS</span><strong>{entries.filter((e) => e.status === "blocked").length}</strong></div></div>
         </aside>
 
