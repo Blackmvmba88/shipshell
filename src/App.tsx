@@ -13,6 +13,7 @@ import {
   EyeOff,
   Globe2,
   Layers3,
+  Maximize2,
   Megaphone,
   Plus,
   Radio,
@@ -24,9 +25,11 @@ import {
 } from "lucide-react";
 import { api, type Health, type LogEntry } from "./api";
 import { LiveTerminal } from "./LiveTerminal";
+import { moduleByShortcut, SHIP_MODULES, type ShipModuleId } from "./modules";
 import { applyUniverse, readStoredUniverse, UNIVERSES, type Universe } from "./universes";
 import "./copilot.css";
 import "./universes.css";
+import "./modules.css";
 
 const PORTS = [
   ["Sitio oficial", "https://blackmamba.world", "BM"],
@@ -54,6 +57,8 @@ function App() {
   const [contextEnabled, setContextEnabled] = useState(true);
   const [pageContext, setPageContext] = useState<ShipShellPageContext | null>(null);
   const [universe, setUniverse] = useState<Universe>(() => readStoredUniverse());
+  const [activeModule, setActiveModule] = useState<ShipModuleId>("browser");
+  const [expandedModule, setExpandedModule] = useState<ShipModuleId | null>(null);
   const [activeDeck, setActiveDeck] = useState<"browser" | "marketing" | "logbook">("browser");
   const [browserState, setBrowserState] = useState<ShipShellBrowserState>({ activeTabId: null, tabs: [] });
   const [browserSlot, setBrowserSlot] = useState<HTMLDivElement | null>(null);
@@ -63,6 +68,7 @@ function App() {
     () => browserState.tabs.find((tab) => tab.id === browserState.activeTabId) ?? null,
     [browserState],
   );
+  const activeModuleMeta = useMemo(() => SHIP_MODULES.find((module) => module.id === activeModule)!, [activeModule]);
 
   const refresh = async () => {
     const [nextHealth, nextLog] = await Promise.all([api.health(), api.logbook()]);
@@ -71,19 +77,27 @@ function App() {
   };
 
   useEffect(() => { refresh().catch(() => undefined); }, []);
-
-  useEffect(() => {
-    applyUniverse(universe);
-  }, [universe]);
-
+  useEffect(() => { applyUniverse(universe); }, [universe]);
   useEffect(() => nativeBrowser?.onState(setBrowserState), [nativeBrowser]);
-
   useEffect(() => { setPageContext(null); }, [browserState.activeTabId]);
 
   useEffect(() => {
+    const handleModuleShortcut = (event: KeyboardEvent) => {
+      if (!event.altKey || event.ctrlKey || event.metaKey) return;
+      const module = moduleByShortcut(event.key);
+      if (!module) return;
+      event.preventDefault();
+      selectModule(module);
+    };
+    window.addEventListener("keydown", handleModuleShortcut);
+    return () => window.removeEventListener("keydown", handleModuleShortcut);
+  });
+
+  useEffect(() => {
     if (!nativeBrowser) return;
-    nativeBrowser.setVisible(activeDeck === "browser" && Boolean(browserSlot));
-    if (!browserSlot || activeDeck !== "browser") return;
+    const browserVisible = activeDeck === "browser" && Boolean(browserSlot) && expandedModule !== "terminal" && expandedModule !== "copilot" && expandedModule !== "logbook";
+    nativeBrowser.setVisible(browserVisible);
+    if (!browserSlot || !browserVisible) return;
     const updateBounds = () => {
       const rect = browserSlot.getBoundingClientRect();
       nativeBrowser.setBounds({ x: rect.x, y: rect.y, width: rect.width, height: rect.height });
@@ -93,9 +107,20 @@ function App() {
     window.addEventListener("resize", updateBounds);
     updateBounds();
     return () => { observer.disconnect(); window.removeEventListener("resize", updateBounds); };
-  }, [nativeBrowser, browserSlot, activeDeck, universe.id]);
+  }, [nativeBrowser, browserSlot, activeDeck, universe.id, expandedModule, activeModule]);
 
   const status = useMemo(() => health?.aiConfigured ? "COPILOTO EN LÍNEA" : "MODO LOCAL", [health]);
+
+  function selectModule(module: ShipModuleId) {
+    setActiveModule(module);
+    if (module === "browser" || module === "ports") setActiveDeck("browser");
+    if (module === "logbook") setActiveDeck("logbook");
+  }
+
+  function toggleModule(module: ShipModuleId) {
+    selectModule(module);
+    setExpandedModule((current) => current === module ? null : module);
+  }
 
   async function runMission(rawInput: string, includePageContext: boolean) {
     const cleanInput = rawInput.trim();
@@ -113,10 +138,12 @@ function App() {
         universeId: universe.id,
         workMode: universe.workMode,
         voice: universe.voice,
+        activeModule,
       });
       if (result.decision.kind === "navigate") {
         setUrl(result.decision.normalizedInput);
         setActiveDeck("browser");
+        setActiveModule("browser");
         await nativeBrowser?.navigate(result.decision.normalizedInput);
         setAnswer(`Ruta preparada: ${result.decision.normalizedInput}`);
       } else {
@@ -141,17 +168,19 @@ function App() {
     event.preventDefault();
     const mission = copilotInput;
     setCopilotInput("");
+    setActiveModule("copilot");
     await runMission(mission, true);
   }
 
   function openPort(href: string) {
     setUrl(href);
     setActiveDeck("browser");
+    setActiveModule("browser");
     if (nativeBrowser) nativeBrowser.navigate(href);
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-active-module={activeModule} data-expanded-module={expandedModule ?? "none"}>
       <div className="universe-stage" aria-hidden="true" />
 
       <header className="topbar">
@@ -162,26 +191,27 @@ function App() {
           <button disabled={busy} aria-label="Iniciar misión">{busy ? <Activity className="spin" size={17} /> : <Send size={17} />}</button>
         </form>
         <div className="system-status"><span className="pulse" />{status} · {universe.workMode.toUpperCase()}</div>
+        <div className="module-status" title={activeModuleMeta.description}><strong>{activeModuleMeta.label}</strong><span>ALT+{activeModuleMeta.shortcut}</span></div>
       </header>
 
       <aside className="rail">
-        <button className={activeDeck === "browser" ? "active" : ""} onClick={() => setActiveDeck("browser")}><Compass /><span>Puente</span></button>
+        <button className={activeDeck === "browser" ? "active" : ""} onClick={() => { setActiveDeck("browser"); selectModule("browser"); }}><Compass /><span>Puente</span></button>
         <button className={activeDeck === "marketing" ? "active" : ""} onClick={() => setActiveDeck("marketing")}><Megaphone /><span>Marketing</span></button>
-        <button className={activeDeck === "logbook" ? "active" : ""} onClick={() => setActiveDeck("logbook")}><BookOpen /><span>Bitácora</span></button>
+        <button className={activeDeck === "logbook" ? "active" : ""} onClick={() => { setActiveDeck("logbook"); selectModule("logbook"); }}><BookOpen /><span>Bitácora</span></button>
       </aside>
 
       <main className="workspace">
-        <section className="browser-panel">
+        <section className={`browser-panel selectable-module ${activeModule === "browser" || activeModule === "ports" || activeModule === "logbook" ? "module-selected" : ""}`} data-module={activeDeck === "logbook" ? "logbook" : "browser"} onMouseDown={() => selectModule(activeDeck === "logbook" ? "logbook" : "browser")} onDoubleClick={() => toggleModule(activeDeck === "logbook" ? "logbook" : "browser")}>
           <div className="panel-heading">
             <div><span className="eyebrow">PUENTE DE MANDO</span><h1>{activeDeck === "browser" ? "Navegación" : activeDeck === "marketing" ? "Cubierta de Marketing" : "Bitácora"}</h1></div>
-            <div className="secure"><ShieldCheck size={15} /> ShipSeal activo</div>
+            <div className="panel-actions"><button className="module-expand" onClick={(event) => { event.stopPropagation(); toggleModule(activeDeck === "logbook" ? "logbook" : "browser"); }} title="Expandir módulo"><Maximize2 size={13} /></button><div className="secure"><ShieldCheck size={15} /> ShipSeal activo</div></div>
           </div>
 
           {activeDeck === "browser" && <>
-            <div className="ports">
+            <div className={`ports selectable-submodule ${activeModule === "ports" ? "module-selected" : ""}`} data-module="ports" onMouseDown={(event) => { event.stopPropagation(); selectModule("ports"); }} onDoubleClick={(event) => { event.stopPropagation(); toggleModule("ports"); }}>
               {PORTS.map(([name, href, icon]) => <button key={name} onClick={() => openPort(href)}><span>{icon}</span><div><strong>{name}</strong><small>ABRIR PUERTO</small></div></button>)}
             </div>
-            <div className="browser-frame">
+            <div className="browser-frame" data-module="browser" onMouseDown={() => selectModule("browser")}>
               {nativeBrowser && browserState.tabs.length > 0 && <div className="tab-strip">
                 {browserState.tabs.map((tab) => <button className={tab.id === browserState.activeTabId ? "active" : ""} key={tab.id} onClick={() => nativeBrowser.selectTab(tab.id)}><span>{tab.loading ? "◌" : "●"}</span><strong>{tab.title}</strong><X size={12} onClick={(event) => { event.stopPropagation(); nativeBrowser.closeTab(tab.id); }} /></button>)}
                 <button className="new-tab" onClick={() => nativeBrowser.newTab("https://www.google.com")}><Plus size={14} /></button>
@@ -203,11 +233,11 @@ function App() {
 
           {activeDeck === "marketing" && <div className="empty-state"><Megaphone /><h2>Centro de campañas listo</h2><p>Conecta un puerto para traer promociones reales. ShipShell no inventará métricas ni campañas.</p><button onClick={() => setActiveDeck("browser")}>Conectar primer puerto</button></div>}
 
-          {activeDeck === "logbook" && <div className="log-list">{entries.length ? entries.map((entry) => <article key={entry.id}><span className={`log-dot ${entry.status}`} /><div><strong>{entry.summary}</strong><small>{entry.event.toUpperCase()} · {new Date(entry.createdAt).toLocaleString()}</small></div></article>) : <div className="empty-state"><BookOpen /><h2>Bitácora limpia</h2><p>Las misiones y maniobras verificables aparecerán aquí.</p></div>}</div>}
+          {activeDeck === "logbook" && <div className="log-list" data-module="logbook">{entries.length ? entries.map((entry) => <article key={entry.id}><span className={`log-dot ${entry.status}`} /><div><strong>{entry.summary}</strong><small>{entry.event.toUpperCase()} · {new Date(entry.createdAt).toLocaleString()}</small></div></article>) : <div className="empty-state"><BookOpen /><h2>Bitácora limpia</h2><p>Las misiones y maniobras verificables aparecerán aquí.</p></div>}</div>}
         </section>
 
-        <aside className="crew-panel copilot-panel">
-          <div className="crew-title copilot-title"><Bot /><div><span>COPILOTO</span><strong>ShipShell Copilot</strong></div><span className="pulse" /></div>
+        <aside className={`crew-panel copilot-panel selectable-module ${activeModule === "copilot" ? "module-selected" : ""}`} data-module="copilot" onMouseDown={() => selectModule("copilot")} onDoubleClick={() => toggleModule("copilot")}>
+          <div className="crew-title copilot-title"><Bot /><div><span>COPILOTO</span><strong>ShipShell Copilot</strong></div><button className="module-expand" onClick={(event) => { event.stopPropagation(); toggleModule("copilot"); }} title="Expandir módulo"><Maximize2 size={13} /></button><span className="pulse" /></div>
 
           <section className="universe-switcher" aria-label="Universo de ShipShell">
             <div className="universe-switcher-head"><div><span>UNIVERSO</span><strong>{universe.name}</strong></div><Layers3 size={16} /></div>
@@ -250,7 +280,7 @@ function App() {
           <div className="mission-stats"><div><span>MISIONES</span><strong>{entries.filter((e) => e.event === "mission").length}</strong></div><div><span>BLOQUEOS</span><strong>{entries.filter((e) => e.status === "blocked").length}</strong></div></div>
         </aside>
 
-        <LiveTerminal workspace={health?.workspace} />
+        <LiveTerminal workspace={health?.workspace} focused={activeModule === "terminal"} onSelect={() => setActiveModule("terminal")} />
       </main>
     </div>
   );
