@@ -24,6 +24,7 @@ for (const file of [
   "electron/main.mjs",
   "electron/preload.cjs",
   "server/index.ts",
+  "server/copilot-profile.ts",
   "src/App.tsx",
   "src/universes.ts",
   "src/universes.css",
@@ -57,6 +58,14 @@ for (const mode of ["focus", "research", "build", "studio", "command", "casual"]
 }
 if (universes.includes("window.localStorage.setItem(\"shipshell.universe\"")) ok("universe preference persists locally");
 else fail("universe preference persistence missing");
+
+const profile = read("server/copilot-profile.ts");
+for (const voice of ["quiet", "technical", "creative", "explorer", "executive", "conversational"]) {
+  if (profile.includes(`${voice}:`)) ok(`copilot voice present: ${voice}`);
+  else fail(`missing copilot voice: ${voice}`);
+}
+if (profile.includes("nunca cambia las reglas de seguridad") && profile.includes("ShipSeal")) ok("voice profiles preserve ShipSeal boundary");
+else fail("voice profiles must explicitly preserve ShipSeal safety boundary");
 
 const gitignore = read(".gitignore");
 if (gitignore.includes(".env") && gitignore.includes(".shipshell/")) ok("secrets and runtime state are ignored");
