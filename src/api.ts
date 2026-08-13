@@ -32,6 +32,22 @@ export interface MissionProfile {
   activeModule?: ShipModuleId;
 }
 
+export interface TerminalSemanticContext {
+  cwd: string;
+  running: boolean;
+  lastCommand?: string;
+  outputTail?: string;
+}
+
+export interface WorkspaceContext {
+  activeModule: ShipModuleId;
+  activeDeck: "browser" | "marketing" | "logbook";
+  universeId: string;
+  currentUrl: string;
+  terminal?: TerminalSemanticContext;
+  logbook?: Array<Pick<LogEntry, "event" | "status" | "summary">>;
+}
+
 export interface TerminalDecision {
   allowed: boolean;
   requiresSeal: boolean;
@@ -114,9 +130,9 @@ async function runCommandStream(
 export const api = {
   health: () => request<Health>("/api/health"),
   logbook: () => request<{ entries: LogEntry[] }>("/api/logbook"),
-  mission: (input: string, context?: MissionContext, profile?: MissionProfile) => request<{ decision: { kind: string; normalizedInput: string }; answer?: string }>("/api/missions", {
+  mission: (input: string, context?: MissionContext, profile?: MissionProfile, workspace?: WorkspaceContext) => request<{ decision: { kind: string; normalizedInput: string }; answer?: string }>("/api/missions", {
     method: "POST",
-    body: JSON.stringify({ input, context, profile }),
+    body: JSON.stringify({ input, context, profile, workspace }),
   }),
   terminalState: (sessionId: string) => request<{ cwd: string }>(`/api/terminal/state?sessionId=${encodeURIComponent(sessionId)}`),
   previewCommand: (sessionId: string, command: string) => request<TerminalPreview>("/api/terminal/preview", {
