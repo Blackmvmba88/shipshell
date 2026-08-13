@@ -1,6 +1,7 @@
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
 import { Activity, Maximize2, ShieldCheck, TerminalSquare, X } from "lucide-react";
-import { api, type TerminalPreview, type TerminalSemanticContext, type TerminalStreamEvent } from "./api";
+import { api, type TerminalPreview, type TerminalStreamEvent } from "./api";
+import { publishTerminalContext } from "./semantic-context";
 import "./terminal.css";
 
 const HISTORY_KEY = "shipshell.terminal.history";
@@ -22,13 +23,11 @@ export function LiveTerminal({
   focused = false,
   onSelect,
   onExpand,
-  onContext,
 }: {
   workspace?: string;
   focused?: boolean;
   onSelect?: () => void;
   onExpand?: () => void;
-  onContext?: (context: TerminalSemanticContext) => void;
 }) {
   const sessionId = useRef(window.crypto.randomUUID());
   const abortRef = useRef<AbortController | null>(null);
@@ -54,8 +53,8 @@ export function LiveTerminal({
   }, [output]);
 
   useEffect(() => {
-    onContext?.({ cwd, running, lastCommand, outputTail: output.slice(-8000) });
-  }, [cwd, running, lastCommand, output, onContext]);
+    publishTerminalContext({ cwd, running, lastCommand, outputTail: output.slice(-8000) });
+  }, [cwd, running, lastCommand, output]);
 
   useEffect(() => {
     if (focused) inputRef.current?.focus();
