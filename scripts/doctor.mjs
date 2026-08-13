@@ -18,7 +18,17 @@ const nodeMajor = Number(process.versions.node.split(".")[0]);
 if (nodeMajor >= 22) ok(`Node ${process.versions.node}`);
 else fail(`Node ${process.versions.node}; ShipShell requires Node 22+`);
 
-for (const file of ["package.json", "index.html", "electron/main.mjs", "electron/preload.cjs", "server/index.ts", "src/App.tsx", ".github/workflows/ci.yml"]) {
+for (const file of [
+  "package.json",
+  "index.html",
+  "electron/main.mjs",
+  "electron/preload.cjs",
+  "server/index.ts",
+  "src/App.tsx",
+  "src/universes.ts",
+  "src/universes.css",
+  ".github/workflows/ci.yml",
+]) {
   if (existsSync(path.join(root, file))) ok(`${file} present`);
   else fail(`${file} missing`);
 }
@@ -36,8 +46,17 @@ if (html.includes("default-src 'self'") && html.includes("object-src 'none'") &&
 else fail("deck CSP baseline is incomplete");
 
 const styles = read("src/styles.css");
-if (!/https?:\/\//i.test(styles)) ok("base stylesheet has no remote asset dependency");
-else warn("base stylesheet references a remote asset; prefer local/system assets under the current CSP");
+const universeStyles = read("src/universes.css");
+if (!/https?:\/\//i.test(styles) && !/https?:\/\//i.test(universeStyles)) ok("stylesheets have no remote asset dependency");
+else warn("a stylesheet references a remote asset; prefer local/system assets under the current CSP");
+
+const universes = read("src/universes.ts");
+for (const mode of ["focus", "research", "build", "studio", "command", "casual"]) {
+  if (universes.includes(`workMode: \"${mode}\"`)) ok(`universe mode present: ${mode}`);
+  else fail(`missing universe mode: ${mode}`);
+}
+if (universes.includes("window.localStorage.setItem(\"shipshell.universe\"")) ok("universe preference persists locally");
+else fail("universe preference persistence missing");
 
 const gitignore = read(".gitignore");
 if (gitignore.includes(".env") && gitignore.includes(".shipshell/")) ok("secrets and runtime state are ignored");
