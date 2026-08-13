@@ -16,6 +16,12 @@ export interface LogEntry {
   summary: string;
 }
 
+export interface MissionVisualContext {
+  available: boolean;
+  imageDataUrl: string;
+  error?: string;
+}
+
 export interface MissionContext {
   available: boolean;
   title: string;
@@ -23,6 +29,7 @@ export interface MissionContext {
   selection: string;
   text: string;
   error?: string;
+  visual?: MissionVisualContext;
 }
 
 export type ShipModuleId = "browser" | "ports" | "copilot" | "terminal" | "logbook";
