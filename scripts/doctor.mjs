@@ -29,6 +29,7 @@ for (const file of [
   "src/App.tsx",
   "src/LiveTerminal.tsx",
   "src/modules.ts",
+  "src/modules.test.ts",
   "src/modules.css",
   "src/terminal.css",
   "src/universes.ts",
@@ -78,6 +79,9 @@ for (const moduleId of ["browser", "ports", "copilot", "terminal", "logbook"]) {
   if (modules.includes(`id: \"${moduleId}\"`)) ok(`work module present: ${moduleId}`);
   else fail(`missing work module: ${moduleId}`);
 }
+if (modules.includes("version: 1") && modules.includes("capabilities:") && modules.includes("accepts:") && modules.includes("provides:") && modules.includes("canConnectModules")) ok("work modules expose versioned composable contracts");
+else fail("work modules must expose versioned capability/signal contracts");
+
 const app = read("src/App.tsx");
 if (app.includes("activeModule") && app.includes("expandedModule") && app.includes("moduleByShortcut")) ok("module selection, expansion, and keyboard focus are wired");
 else fail("module focus system is incomplete");
@@ -98,7 +102,7 @@ if (server.includes("shell: false") && server.includes("delete env[key]") && ser
 else fail("terminal process isolation needs review");
 if (server.includes("res.on(\"close\"") && server.includes("SIGINT")) ok("terminal process cancellation propagates to the child process");
 else fail("terminal cancellation wiring missing");
-if (liveTerminal.includes("HISTORY_KEY") && liveTerminal.includes("ArrowUp") && liveTerminal.includes("Ctrl+L") && liveTerminal.includes("abortRef.current.abort()")) ok("terminal developer ergonomics include history, clear, focus, and Ctrl+C cancellation");
+if (liveTerminal.includes("HISTORY_KEY") && liveTerminal.includes("ArrowUp") && liveTerminal.includes("Ctrl+L") && /abortRef\.current\?*\.abort\(\)/.test(liveTerminal)) ok("terminal developer ergonomics include history, clear, focus, and Ctrl+C cancellation");
 else fail("terminal developer ergonomics are incomplete");
 if (liveTerminal.includes("Sellar y ejecutar") && liveTerminal.includes("runCommandStream")) ok("terminal UI exposes explicit ShipSeal and live output");
 else fail("terminal UI is not wired to live ShipSeal flow");
