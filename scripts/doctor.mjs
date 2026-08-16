@@ -34,6 +34,8 @@ for (const file of [
   "server/workspace-context.test.ts",
   "server/guard.ts",
   "server/guard.test.ts",
+  "server/terminal-execution.ts",
+  "server/terminal-execution.test.ts",
   "server/terminal-seal.ts",
   "server/terminal-seal.test.ts",
   "src/App.tsx",
@@ -133,6 +135,7 @@ if (annotationDock.includes('id: "underline"') && annotationDock.includes('id: "
 
 const server = read("server/index.ts");
 const guard = read("server/guard.ts");
+const terminalExecution = read("server/terminal-execution.ts");
 const terminalSeal = read("server/terminal-seal.ts");
 const liveTerminal = read("src/LiveTerminal.tsx");
 const main = read("electron/main.mjs");
@@ -146,15 +149,20 @@ if (preload.includes("setAnnotationMode") && preload.includes("clearAnnotations"
 if (liveTerminal.includes("publishTerminalContext") && liveTerminal.includes("output.slice(-8000)")) ok("terminal publishes bounded live semantic state"); else fail("terminal semantic publisher missing");
 if (server.includes("/api/terminal/run-stream") && server.includes("application/x-ndjson")) ok("live terminal streams process output"); else fail("live terminal streaming route missing");
 if (server.includes("terminalSessions = new Map") && server.includes("resolveTerminalDirectory") && server.includes("session.cwd")) ok("terminal cwd is session-aware and workspace-bounded"); else fail("terminal session cwd boundary missing");
+if (server.includes("reviewCommandInWorkspace(command, workspace, session.cwd)") && guard.includes("realpathSync") && guard.includes("nearestExistingRealPath") && guard.includes("resolvesInsideWorkspace")) ok("terminal validates real workspace paths at preview and execution"); else fail("realpath/symlink workspace boundary missing");
 if (terminalSeal.includes("sessionId") && terminalSeal.includes("approved: false") && terminalSeal.includes("ticket.used = true") && terminalSeal.includes("ttlMs = 60_000")) ok("terminal ShipSeal is session-bound, explicit, expiring, and single-use"); else fail("terminal ShipSeal must be session-bound, explicit, expiring, and single-use");
 if (guard.includes("BLOCKED_EXECUTABLES") && guard.includes("BLOCKED_READ_OPTIONS") && guard.includes("gitArgsStayInsideWorkspace") && guard.includes('subcommand.startsWith("-")') && guard.includes("requiresSeal: true") && guard.includes("reviewGit")) ok("terminal policy blocks shell, tool-option, Git-config, and workspace escape paths"); else fail("terminal risk policy is incomplete");
-if (server.includes("shell: false") && server.includes("delete env[key]") && server.includes("OPENAI_API_KEY")) ok("terminal child processes avoid shell expansion and secret inheritance"); else fail("terminal process isolation needs review");
+if (server.includes("shell: false") && server.includes("buildTerminalEnvironment(process.env)") && terminalExecution.includes("SENSITIVE_ENV_NAME") && terminalExecution.includes("EXECUTION_INJECTION_ENV")) ok("terminal child processes avoid shell expansion, secret inheritance, and env-based code injection"); else fail("terminal process isolation needs review");
+if (server.includes("buildTerminalExecutionArgs(decision, safeGitHooksDir)") && terminalExecution.includes("core.hooksPath") && terminalExecution.includes("core.fsmonitor=false") && terminalExecution.includes("--no-ext-diff") && terminalExecution.includes("--no-textconv")) ok("Git child execution disables hooks, FSMonitor hooks, external diff, and textconv helpers"); else fail("Git child execution hardening missing");
 if (server.includes("res.on(\"close\"") && server.includes("SIGINT")) ok("terminal process cancellation propagates to the child process"); else fail("terminal cancellation wiring missing");
 if (liveTerminal.includes("HISTORY_KEY") && liveTerminal.includes("ArrowUp") && liveTerminal.includes("Ctrl+L") && /abortRef\.current\?\.abort\(\)/.test(liveTerminal)) ok("terminal developer ergonomics include history, clear, focus, and Ctrl+C cancellation"); else fail("terminal developer ergonomics are incomplete");
 if (liveTerminal.includes("Sellar y ejecutar") && liveTerminal.includes("runCommandStream")) ok("terminal UI exposes explicit ShipSeal and live output"); else fail("terminal UI is not wired to live ShipSeal flow");
 
 const guardTests = read("server/guard.test.ts");
-if (guardTests.includes("grep --file=/etc/passwd") && guardTests.includes("git -c alias.x=!sh x") && guardTests.includes("git clone https://example.com/repo.git ../outside")) ok("terminal regression tests cover tool-internal and Git escape paths"); else fail("terminal guard regression coverage is incomplete");
+if (guardTests.includes("grep --file=/etc/passwd") && guardTests.includes("git -c alias.x=!sh x") && guardTests.includes("escape/secret.txt") && guardTests.includes("symlinkSync")) ok("terminal regression tests cover tool-internal, Git, and symlink escape paths"); else fail("terminal guard regression coverage is incomplete");
+
+const executionTests = read("server/terminal-execution.test.ts");
+if (executionTests.includes("NODE_OPTIONS") && executionTests.includes("GIT_SSH_COMMAND") && executionTests.includes("--no-textconv") && executionTests.includes("--local")) ok("terminal execution tests cover env injection, Git helper suppression, and local config scope"); else fail("terminal execution hardening coverage missing");
 
 const sealTests = read("server/terminal-seal.test.ts");
 if (sealTests.includes("not-the-ticket-fingerprint") && sealTests.includes("TerminalSealStore(0)")) ok("ShipSeal tests cover wrong fingerprints and expiry"); else fail("ShipSeal expiry/fingerprint coverage missing");
@@ -164,7 +172,7 @@ const smokeE2e = read("tests/e2e/smoke.spec.ts");
 const shipSealE2e = read("tests/e2e/copilot-shipseal.spec.ts");
 if (playwright.includes("webServer") && playwright.includes("e2e:server") && playwright.includes("trace: 'on-first-retry'")) ok("Playwright owns its test server and captures retry evidence"); else fail("Playwright server/evidence configuration incomplete");
 if (smokeE2e.includes("professional-graphite") && smokeE2e.includes("ShipSeal protegido")) ok("smoke E2E validates the professional default surface"); else fail("smoke E2E does not assert the product default");
-if (shipSealE2e.includes("focusAnnotations") && shipSealE2e.includes("runBody).toBeUndefined") && shipSealE2e.includes("Sellar y ejecutar")) ok("behavioral E2E covers spatial Copilot and pre-execution ShipSeal gating"); else fail("behavioral E2E safety coverage incomplete");
+if (shipSealE2e.includes("focusAnnotations") && shipSealE2e.includes("runBody).toBeUndefined") && shipSealE2e.includes("Sellar y ejecutar") && shipSealE2e.includes("__shipShellContextCalls") && shipSealE2e.includes("toBe(0)")) ok("behavioral E2E covers spatial Copilot, context-off privacy, and pre-execution ShipSeal gating"); else fail("behavioral E2E safety coverage incomplete");
 
 const ci = read(".github/workflows/ci.yml");
 if (ci.includes("npm run validate") && ci.includes("playwright install --with-deps chromium") && ci.includes("npm run test:e2e")) ok("CI gates Doctor, unit/build/audit, and Chromium E2E"); else fail("CI validation stack is incomplete");
