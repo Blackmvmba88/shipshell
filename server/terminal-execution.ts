@@ -16,6 +16,8 @@ export function buildTerminalEnvironment(source: NodeJS.ProcessEnv): NodeJS.Proc
   // ShipSeal, but arbitrary GIT_* process configuration never crosses the bridge.
   if (source.SSH_AUTH_SOCK) env.SSH_AUTH_SOCK = source.SSH_AUTH_SOCK;
   env.GIT_TERMINAL_PROMPT = "0";
+  env.GIT_ALLOW_PROTOCOL = "https:http:ssh:git";
+  env.GIT_PROTOCOL_FROM_USER = "0";
   return env;
 }
 
