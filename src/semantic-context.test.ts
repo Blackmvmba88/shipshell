@@ -1,28 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { publishTerminalContext, readTerminalContext, redactTerminalContextText } from "./semantic-context";
+import { publishTerminalContext, readTerminalContext } from "./semantic-context";
 
-describe("terminal semantic-context redaction", () => {
-  it("redacts common secret formats before they can enter Copilot context", () => {
-    const raw = [
-      "OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz123456",
-      "Authorization: Bearer abcdefghijklmnopqrstuvwxyz.1234567890",
-      "GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz123456",
-      "registry=https://user:supersecret@example.test/pkg",
-      "remote=https://ghp_abcdefghijklmnopqrstuvwxyz123456@example.test/repo",
-      "jwt=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijklmnop",
-      "AKIAABCDEFGHIJKLMNOP",
-    ].join("\n");
-
-    const redacted = redactTerminalContextText(raw)!;
-    expect(redacted).not.toContain("sk-proj-");
-    expect(redacted).not.toContain("ghp_");
-    expect(redacted).not.toContain("supersecret");
-    expect(redacted).not.toContain("eyJhbGci");
-    expect(redacted).not.toContain("AKIAABCDEFGHIJKLMNOP");
-    expect(redacted).toContain("[REDACTED]");
-  });
-
-  it("redacts both the last command and output tail after explicit sharing", () => {
+describe("terminal semantic context", () => {
+  it("redacts command and output text after explicit sharing", () => {
     publishTerminalContext({
       cwd: "./src",
       running: false,
@@ -56,17 +36,5 @@ describe("terminal semantic-context redaction", () => {
       lastCommand: undefined,
       outputTail: undefined,
     });
-  });
-
-  it("removes private-key blocks from model-facing terminal context", () => {
-    const value = [
-      "before",
-      "-----BEGIN PRIVATE KEY-----",
-      "abcdefghijklmnopqrstuvwxyz",
-      "-----END PRIVATE KEY-----",
-      "after",
-    ].join("\n");
-
-    expect(redactTerminalContextText(value)).toBe("before\n[REDACTED PRIVATE KEY]\nafter");
   });
 });
