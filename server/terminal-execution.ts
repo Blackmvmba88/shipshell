@@ -1,6 +1,6 @@
 import type { CommandDecision } from "./guard.js";
 
-const SENSITIVE_ENV_NAME = /(?:^|_)(?:TOKEN|SECRET|PASSWORD|PASSWD|API_KEY|ACCESS_KEY|PRIVATE_KEY|CREDENTIAL|COOKIE|AUTHORIZATION)(?:_|$)/i;
+const SENSITIVE_ENV_NAME = /(TOKEN|SECRET|PASSWORD|PASSWD|API[_-]?KEY|ACCESS[_-]?KEY|PRIVATE[_-]?KEY|CREDENTIAL|COOKIE|AUTHORIZATION)/i;
 const EXECUTION_INJECTION_ENV = /^(?:NODE_OPTIONS|NODE_PATH|PYTHONPATH|PYTHONHOME|RUBYOPT|PERL5OPT|BASH_ENV|ENV|SHELLOPTS|LD_PRELOAD|LD_LIBRARY_PATH|DYLD_.+|GIT_.+)$/i;
 
 export function buildTerminalEnvironment(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
@@ -35,5 +35,11 @@ export function buildTerminalExecutionArgs(decision: CommandDecision, safeHooksP
     ? ["--no-ext-diff", "--no-textconv"]
     : [];
 
-  return [...hardenedPrefix, subcommand, ...diffSafety, ...rest];
+  // Unsealed Git config reads are intentionally local to the repository. This
+  // prevents a harmless-looking query from disclosing global/user config.
+  const scopedRest = subcommand === "config" && !rest.includes("--local")
+    ? ["--local", ...rest]
+    : rest;
+
+  return [...hardenedPrefix, subcommand, ...diffSafety, ...scopedRest];
 }
