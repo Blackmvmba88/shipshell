@@ -1,5 +1,5 @@
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
-import { Activity, Maximize2, ShieldCheck, TerminalSquare, X } from "lucide-react";
+import { Activity, Eye, EyeOff, Maximize2, ShieldCheck, TerminalSquare, X } from "lucide-react";
 import { api, type TerminalPreview, type TerminalStreamEvent } from "./api";
 import { publishTerminalContext } from "./semantic-context";
 import "./terminal.css";
@@ -39,6 +39,7 @@ export function LiveTerminal({
   const [preview, setPreview] = useState<TerminalPreview | null>(null);
   const [running, setRunning] = useState(false);
   const [lastCommand, setLastCommand] = useState<string | undefined>();
+  const [shareOutputWithCopilot, setShareOutputWithCopilot] = useState(false);
   const [history, setHistory] = useState<string[]>(() => readHistory());
   const [historyIndex, setHistoryIndex] = useState<number | null>(null);
   const [historyDraft, setHistoryDraft] = useState("");
@@ -53,8 +54,14 @@ export function LiveTerminal({
   }, [output]);
 
   useEffect(() => {
-    publishTerminalContext({ cwd, running, lastCommand, outputTail: output.slice(-8000) });
-  }, [cwd, running, lastCommand, output]);
+    publishTerminalContext({
+      cwd,
+      running,
+      outputShared: shareOutputWithCopilot,
+      lastCommand,
+      outputTail: output.slice(-8000),
+    });
+  }, [cwd, running, lastCommand, output, shareOutputWithCopilot]);
 
   useEffect(() => {
     if (focused) inputRef.current?.focus();
@@ -217,6 +224,20 @@ export function LiveTerminal({
       <div className="terminal-title">
         <TerminalSquare size={15} />
         <span>TERMINAL // {workspace ?? "conectando"} // {cwd}</span>
+        <button
+          className={`terminal-context-toggle ${shareOutputWithCopilot ? "on" : ""}`}
+          type="button"
+          aria-pressed={shareOutputWithCopilot}
+          aria-label={shareOutputWithCopilot ? "Desactivar contexto IA del terminal" : "Activar contexto IA del terminal"}
+          title={shareOutputWithCopilot ? "La salida redactada del terminal puede entrar al contexto del Copilot" : "La salida del terminal permanece local y fuera del contexto del Copilot"}
+          onClick={(event) => {
+            event.stopPropagation();
+            setShareOutputWithCopilot((current) => !current);
+          }}
+        >
+          {shareOutputWithCopilot ? <Eye size={12} /> : <EyeOff size={12} />}
+          IA {shareOutputWithCopilot ? "ON" : "OFF"}
+        </button>
         <button className="module-expand terminal-expand" type="button" onClick={(event) => { event.stopPropagation(); onExpand?.(); }} title="Expandir terminal"><Maximize2 size={13} /></button>
         <span className={running ? "terminal-live running" : "terminal-live"}>{running && <Activity className="spin" size={12} />}{terminalStatus}</span>
       </div>
