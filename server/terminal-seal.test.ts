@@ -26,11 +26,24 @@ describe("TerminalSealStore", () => {
     const decision = reviewCommand(command);
     const ticket = store.issue(sessionId, command, cwd, decision);
 
+    expect(store.approve(ticket.id, sessionId, "not-the-ticket-fingerprint")).toBe(false);
     expect(store.approve(ticket.id, otherSessionId, ticket.fingerprint)).toBe(false);
     expect(store.approve(ticket.id, sessionId, ticket.fingerprint)).toBe(true);
     expect(store.consume(ticket.id, otherSessionId, command, cwd, decision)).toBe(false);
     expect(store.consume(ticket.id, sessionId, "npm publish", cwd, reviewCommand("npm publish"))).toBe(false);
     expect(store.consume(ticket.id, sessionId, command, "/workspace/other", decision)).toBe(false);
+  });
+
+  it("rejects expired seals even if the ticket id and fingerprint are correct", () => {
+    const store = new TerminalSealStore(0);
+    const sessionId = "00000000-0000-4000-8000-000000000001";
+    const command = "touch proof.txt";
+    const cwd = "/workspace/project";
+    const decision = reviewCommand(command);
+    const ticket = store.issue(sessionId, command, cwd, decision);
+
+    expect(store.approve(ticket.id, sessionId, ticket.fingerprint)).toBe(false);
+    expect(store.consume(ticket.id, sessionId, command, cwd, decision)).toBe(false);
   });
 
   it("does not require tickets for read-only commands", () => {
