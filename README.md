@@ -12,9 +12,10 @@ The default experience is intentionally calm and professional. More expressive *
 - **Persistent Copilot** — can receive a bounded semantic snapshot of the active page when the user enables context.
 - **Automatic browser vision** — low-detail, bounded capture is available when semantic context is not enough.
 - **Spatial Copilot** — underline, circle, or glow page elements; numbered anchors remain explicit references between user and Copilot.
-- **Semantic Context Bus** — publishes the active module, deck, Universe, URL, bounded terminal state, and recent operational context.
-- **Live terminal** — streamed stdout/stderr, session-scoped cwd, history, cancellation, and explicit command policy.
+- **Semantic Context Bus** — publishes the active module, deck, Universe, URL, bounded operational state, and recent evidence. Terminal command/output text requires explicit opt-in.
+- **Live terminal** — streamed stdout/stderr, session-scoped cwd, history, cancellation, realpath workspace containment, and explicit command policy.
 - **ShipSeal** — consequential terminal actions require a single-use, expiring approval bound to the exact command and cwd.
+- **Privacy-aware evidence** — recognized secret shapes are redacted before model-facing terminal context or Logbook persistence; recognized-secret commands are not retained in persistent terminal history.
 - **Logbook** — missions and operational outcomes are retained as evidence instead of being implied from UI state.
 - **Composable modules** — Browser, Ports, Copilot, Terminal, and Logbook expose versioned module contracts and workspace handoff/checkpoint planning.
 - **Universes** — work modes can change density, layout priority, Copilot voice, theme, and atmosphere without weakening safety boundaries.
@@ -33,7 +34,9 @@ Optional presets include Focus Minimal, Research Sunset, Build Obsidian, Studio 
 ## Core interaction loop
 
 ```text
-Observe page
+Observe page / workspace
+    ↓
+User chooses what context may be shared
     ↓
 Copilot receives bounded context / anchors
     ↓
@@ -41,9 +44,9 @@ Explain or propose
     ↓
 If action is consequential → ShipSeal approval
     ↓
-Execute through a narrow capability boundary
+Revalidate boundary and execute narrowly
     ↓
-Record outcome / evidence
+Record sanitized outcome / evidence
 ```
 
 ShipShell treats page text, screenshots, terminal output, anchor notes, and other external content as **untrusted reference data**. Context can inform a proposal; it cannot grant authority.
@@ -72,6 +75,7 @@ Electron desktop shell
     ├── bounded semantic / visual context validation
     ├── terminal policy + streaming executor
     ├── ShipSeal approval store
+    ├── shared sensitive-data redaction
     └── evidence Logbook
 ```
 
@@ -129,13 +133,15 @@ Playwright starts its own Vite server. CI installs Chromium and gates pull reque
 1. The browser UI never receives `OPENAI_API_KEY`.
 2. Remote pages cannot invoke the preload bridge used by the command deck.
 3. Remote content, screenshots, notes, anchors, and terminal output are data — never authority.
-4. Terminal child processes run without shell expansion and with secrets removed from their environment.
-5. Commands are classified before execution; blocked commands do not reach the executor.
-6. Consequential terminal actions require an explicit ShipSeal.
-7. A terminal ShipSeal is session-bound, command/cwd-bound, expiring, and single-use.
-8. Spatial focus may highlight a page element; highlighting alone never clicks or executes a remote action.
-9. A Universe may change presentation and response voice; it cannot weaken security, permissions, or factual requirements.
-10. Claims of completed work should be backed by runtime output, tests, or Logbook evidence.
+4. Page context and terminal command/output sharing have explicit user-controlled boundaries; terminal text is off by default.
+5. Terminal child processes run without shell expansion, with secret/injection variables scrubbed, and inside a realpath-validated workspace boundary.
+6. Commands are classified before execution; blocked commands do not reach the executor.
+7. Consequential terminal actions require an explicit ShipSeal.
+8. A terminal ShipSeal is session-bound, command/cwd-bound, expiring, and single-use.
+9. Recognized secrets are redacted before model-facing terminal context and Logbook persistence; this is defense in depth, not perfect secret detection.
+10. Spatial focus may highlight a page element; highlighting alone never clicks or executes a remote action.
+11. A Universe may change presentation and response voice; it cannot weaken security, permissions, or factual requirements.
+12. Claims of completed work should be backed by runtime output, tests, or sanitized Logbook evidence.
 
 ## Product principles
 
