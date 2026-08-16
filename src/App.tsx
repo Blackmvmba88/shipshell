@@ -148,7 +148,7 @@ function App() {
       if (!numbers.length || busy) return;
       setActiveModule("copilot");
       const labels = numbers.map((number) => `Ancla ${number}`).join(", ");
-      void runMission(`Compara ${labels}. Usa sus notas y contexto visual/semántico, explica las diferencias importantes y recomienda sólo si hay evidencia suficiente.`, true);
+      void runMission(`Compara ${labels}. Usa sus notas y contexto visual/semántico, explica las diferencias importantes y recomienda sólo si hay evidencia suficiente.`, true, "copilot");
     };
     window.addEventListener("shipshell:ask-anchors", handleAskAnchors);
     return () => window.removeEventListener("shipshell:ask-anchors", handleAskAnchors);
@@ -187,7 +187,7 @@ function App() {
     setExpandedModule((current) => current === module ? null : module);
   }
 
-  async function runMission(rawInput: string, includePageContext: boolean) {
+  async function runMission(rawInput: string, includePageContext: boolean, activeModuleOverride?: ShipModuleId) {
     const cleanInput = rawInput.trim();
     if (!cleanInput) return;
     setBusy(true);
@@ -203,7 +203,7 @@ function App() {
         universeId: universe.id,
         workMode: universe.workMode,
         voice: universe.voice,
-        activeModule,
+        activeModule: activeModuleOverride ?? activeModule,
       });
       if (result.decision.kind === "navigate") {
         setUrl(result.decision.normalizedInput);
@@ -235,7 +235,7 @@ function App() {
 
   async function runCopilotPrompt(prompt: string) {
     setActiveModule("copilot");
-    await runMission(prompt, true);
+    await runMission(prompt, true, "copilot");
   }
 
   async function submitCopilot(event: FormEvent) {
@@ -243,7 +243,7 @@ function App() {
     const mission = copilotInput;
     setCopilotInput("");
     setActiveModule("copilot");
-    await runMission(mission, true);
+    await runMission(mission, true, "copilot");
   }
 
   function openPort(href: string) {
