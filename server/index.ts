@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { statSync } from "node:fs";
+import { mkdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import cors from "cors";
@@ -13,6 +13,7 @@ import { decideMission } from "./decision.js";
 import { resolveTerminalDirectory, resolveWorkspace, reviewCommandInWorkspace } from "./guard.js";
 import { Logbook } from "./logbook.js";
 import { buildMissionContent } from "./mission-content.js";
+import { buildTerminalEnvironment, buildTerminalExecutionArgs } from "./terminal-execution.js";
 import { TerminalSealStore } from "./terminal-seal.js";
 import { buildWorkspaceContextBlock, workspaceContextSchema } from "./workspace-context.js";
 
@@ -24,7 +25,10 @@ dotenv.config({ path: path.join(root, "in documents") });
 const app = express();
 const port = Number(process.env.SHIPSHELL_PORT ?? 8787);
 const workspace = resolveWorkspace(root);
-const logbook = new Logbook(path.join(root, ".shipshell", "logbook.json"));
+const shipShellStateDir = path.join(root, ".shipshell");
+const safeGitHooksDir = path.join(shipShellStateDir, "empty-hooks");
+mkdirSync(safeGitHooksDir, { recursive: true });
+const logbook = new Logbook(path.join(shipShellStateDir, "logbook.json"));
 const terminalSeals = new TerminalSealStore();
 const terminalSessions = new Map<string, { cwd: string; touchedAt: number }>();
 const client = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
@@ -54,12 +58,6 @@ function getTerminalSession(sessionId: string) {
 function displayCwd(cwd: string) {
   const relative = path.relative(workspace, cwd);
   return relative ? `./${relative}` : ".";
-}
-
-function terminalEnv() {
-  const env = { ...process.env };
-  for (const key of ["OPENAI_API_KEY", "NPM_TOKEN", "GITHUB_TOKEN", "GH_TOKEN"]) delete env[key];
-  return env;
 }
 
 app.get("/api/health", (_req, res) => {
@@ -255,10 +253,10 @@ app.post("/api/terminal/run-stream", async (req, res, next) => {
       return;
     }
 
-    const child = spawn(decision.executable, decision.args ?? [], {
+    const child = spawn(decision.executable, buildTerminalExecutionArgs(decision, safeGitHooksDir), {
       cwd: session.cwd,
       shell: false,
-      env: terminalEnv(),
+      env: buildTerminalEnvironment(process.env),
     });
 
     let outputBytes = 0;
