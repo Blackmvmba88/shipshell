@@ -1,7 +1,7 @@
 import type { CommandDecision } from "./guard.js";
 
 const SENSITIVE_ENV_NAME = /(TOKEN|SECRET|PASSWORD|PASSWD|API[_-]?KEY|ACCESS[_-]?KEY|PRIVATE[_-]?KEY|CREDENTIAL|COOKIE|AUTHORIZATION)/i;
-const EXECUTION_INJECTION_ENV = /^(?:NODE_OPTIONS|NODE_PATH|PYTHONPATH|PYTHONHOME|RUBYOPT|PERL5OPT|BASH_ENV|ENV|SHELLOPTS|LD_PRELOAD|LD_LIBRARY_PATH|DYLD_.+|GIT_.+)$/i;
+const EXECUTION_INJECTION_ENV = /^(?:NODE_OPTIONS|NODE_PATH|PYTHONPATH|PYTHONHOME|RUBYOPT|PERL5OPT|BASH_ENV|ENV|SHELLOPTS|LD_PRELOAD|LD_LIBRARY_PATH|DYLD_.+|GIT_.+|RIPGREP_CONFIG_PATH)$/i;
 
 export function buildTerminalEnvironment(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
@@ -21,6 +21,11 @@ export function buildTerminalEnvironment(source: NodeJS.ProcessEnv): NodeJS.Proc
 
 export function buildTerminalExecutionArgs(decision: CommandDecision, safeHooksPath: string): string[] {
   const args = decision.args ?? [];
+
+  if (decision.executable === "rg") {
+    return args.includes("--no-config") ? args : ["--no-config", ...args];
+  }
+
   if (decision.executable !== "git") return args;
 
   const [subcommand, ...rest] = args;
