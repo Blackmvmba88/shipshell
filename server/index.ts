@@ -10,7 +10,7 @@ import { z } from "zod";
 import { buildMissionInput, pageContextSchema, SHIPSHELL_COPILOT_SYSTEM_PROMPT } from "./browser-context.js";
 import { buildCopilotProfileInstruction, copilotProfileSchema } from "./copilot-profile.js";
 import { decideMission } from "./decision.js";
-import { resolveTerminalDirectory, resolveWorkspace, reviewCommand } from "./guard.js";
+import { resolveTerminalDirectory, resolveWorkspace, reviewCommandInWorkspace } from "./guard.js";
 import { Logbook } from "./logbook.js";
 import { buildMissionContent } from "./mission-content.js";
 import { TerminalSealStore } from "./terminal-seal.js";
@@ -174,7 +174,7 @@ app.get("/api/terminal/state", (req, res) => {
 app.post("/api/terminal/preview", (req, res) => {
   const { sessionId, command } = terminalCommandSchema.omit({ sealId: true }).parse(req.body);
   const session = getTerminalSession(sessionId);
-  const decision = reviewCommand(command);
+  const decision = reviewCommandInWorkspace(command, workspace, session.cwd);
   const approval = decision.allowed && decision.requiresSeal
     ? terminalSeals.issue(sessionId, command, session.cwd, decision)
     : undefined;
@@ -193,7 +193,7 @@ app.post("/api/terminal/run-stream", async (req, res, next) => {
   try {
     const { sessionId, command, sealId } = terminalCommandSchema.parse(req.body);
     const session = getTerminalSession(sessionId);
-    const decision = reviewCommand(command);
+    const decision = reviewCommandInWorkspace(command, workspace, session.cwd);
 
     if (!decision.allowed) {
       await logbook.append({ event: "terminal", status: "blocked", summary: command, evidence: { decision, cwd: displayCwd(session.cwd), sessionId } });
