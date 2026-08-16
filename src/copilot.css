@@ -3,14 +3,14 @@
 }
 
 .topbar {
-  background: rgba(7, 10, 8, .96);
+  background: color-mix(in srgb, var(--universe-panel) 96%, transparent);
 }
 
 .radar {
-  border-radius: 12px;
-  background: rgba(255, 255, 255, .035);
-  border-color: rgba(255, 255, 255, .09);
-  box-shadow: 0 8px 26px rgba(0, 0, 0, .16);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--universe-panel-strong) 88%, transparent);
+  border-color: var(--universe-line);
+  box-shadow: none;
 }
 
 .browser-panel {
@@ -31,7 +31,7 @@
   min-height: 45px;
   padding: 7px;
   gap: 7px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
 }
 
 .ports button > span {
@@ -45,15 +45,15 @@
 
 .browser-frame {
   height: calc(100% - 91px);
-  border-radius: 10px;
+  border-radius: var(--radius);
   overflow: hidden;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, .2);
+  box-shadow: var(--shadow);
 }
 
 .tab-strip {
   height: 36px;
   padding-top: 5px;
-  background: #070a08;
+  background: color-mix(in srgb, var(--universe-bg) 94%, black);
 }
 
 .tab-strip button {
@@ -63,7 +63,7 @@
 
 .browser-toolbar {
   height: 39px;
-  background: rgba(255, 255, 255, .025);
+  background: color-mix(in srgb, var(--universe-panel-strong) 82%, transparent);
 }
 
 .copilot-panel {
@@ -71,8 +71,8 @@
   flex-direction: column;
   gap: 12px;
   padding: 16px;
-  background: linear-gradient(180deg, rgba(12, 16, 13, .98), rgba(6, 10, 8, .98));
-  border-left: 1px solid rgba(255, 255, 255, .055);
+  background: var(--universe-panel);
+  border-left: 1px solid var(--universe-line);
 }
 
 .copilot-title {
@@ -82,7 +82,7 @@
 .copilot-title > svg {
   width: 20px;
   height: 20px;
-  color: #dff7e7;
+  color: var(--universe-text);
 }
 
 .copilot-title strong {
@@ -91,9 +91,10 @@
 
 .copilot-context-card {
   padding: 11px;
-  border: 1px solid rgba(255, 255, 255, .075);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, .028);
+  border: 1px solid var(--universe-line);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--universe-panel-strong) 88%, transparent);
+  box-shadow: none;
 }
 
 .context-source {
@@ -119,15 +120,15 @@
 }
 
 .context-source span {
-  color: #6f8176;
-  font: 8px 'IBM Plex Mono';
-  letter-spacing: .12em;
+  color: var(--muted);
+  font: 500 8px var(--mono);
+  letter-spacing: .08em;
 }
 
 .context-source strong {
   margin-top: 4px;
   overflow: hidden;
-  color: #e6f1e9;
+  color: var(--universe-text);
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -136,8 +137,8 @@
 .context-source small {
   margin-top: 4px;
   overflow: hidden;
-  color: #75877c;
-  font: 8px 'IBM Plex Mono';
+  color: var(--muted);
+  font: 8px var(--mono);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -148,25 +149,25 @@
   gap: 6px;
   margin-top: 10px;
   padding: 6px 8px;
-  border: 1px solid rgba(255, 255, 255, .09);
+  border: 1px solid var(--universe-line);
   border-radius: 999px;
-  background: rgba(255, 255, 255, .03);
-  color: #839288;
-  font: 8px 'IBM Plex Mono';
+  background: color-mix(in srgb, var(--universe-panel-strong) 84%, transparent);
+  color: var(--muted);
+  font: 500 8px var(--mono);
   cursor: pointer;
 }
 
 .context-toggle.on {
-  border-color: rgba(57, 247, 154, .24);
-  background: rgba(57, 247, 154, .065);
-  color: #aef4ca;
+  border-color: color-mix(in srgb, var(--green) 30%, transparent);
+  background: color-mix(in srgb, var(--green) 8%, transparent);
+  color: var(--green);
 }
 
 .selection-chip {
   display: inline-block;
   margin: 8px 0 0 6px;
   color: var(--cyan);
-  font: 8px 'IBM Plex Mono';
+  font: 500 8px var(--mono);
 }
 
 .copilot-quick-actions {
@@ -177,22 +178,22 @@
 
 .copilot-quick-actions button {
   padding: 7px 9px;
-  border: 1px solid rgba(255, 255, 255, .075);
+  border: 1px solid var(--universe-line);
   border-radius: 999px;
-  background: rgba(255, 255, 255, .025);
-  color: #a8b7ad;
+  background: color-mix(in srgb, var(--universe-panel-strong) 78%, transparent);
+  color: var(--universe-muted);
   font-size: 9px;
   cursor: pointer;
 }
 
 .copilot-quick-actions button:hover:not(:disabled) {
-  border-color: rgba(76, 227, 255, .25);
-  color: #e4f5e9;
+  border-color: color-mix(in srgb, var(--cyan) 30%, transparent);
+  color: var(--universe-text);
 }
 
 .copilot-quick-actions button:disabled {
   cursor: default;
-  opacity: .32;
+  opacity: .38;
 }
 
 .copilot-message {
@@ -214,10 +215,14 @@
   align-items: end;
   gap: 8px;
   padding: 10px;
-  border: 1px solid rgba(255, 255, 255, .10);
-  border-radius: 13px;
-  background: rgba(255, 255, 255, .04);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, .18);
+  border: 1px solid var(--universe-line);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--universe-panel-strong) 88%, transparent);
+  box-shadow: none;
+}
+
+.copilot-form:focus-within {
+  border-color: color-mix(in srgb, var(--cyan) 48%, transparent);
 }
 
 .copilot-form > svg {
@@ -234,12 +239,12 @@
   border: 0;
   outline: 0;
   background: transparent;
-  color: #edf6f0;
-  font: 11px/1.5 Inter, system-ui, sans-serif;
+  color: var(--universe-text);
+  font: 11px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Helvetica, Arial, sans-serif;
 }
 
 .copilot-form textarea::placeholder {
-  color: #64736a;
+  color: var(--muted);
 }
 
 .copilot-form button {
@@ -247,9 +252,9 @@
   height: 30px;
   display: grid;
   place-items: center;
-  border: 1px solid rgba(57, 247, 154, .22);
-  border-radius: 9px;
-  background: rgba(57, 247, 154, .09);
+  border: 1px solid color-mix(in srgb, var(--green) 30%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--green) 10%, transparent);
   color: var(--green);
   cursor: pointer;
 }
