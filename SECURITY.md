@@ -43,6 +43,20 @@ Page text, selection, URLs, screenshots, and visual anchors cross into the Copil
 
 All remote content remains untrusted even when the model summarizes or references it.
 
+### Terminal context privacy
+
+Terminal state and terminal text have different sharing rules.
+
+- cwd and running state may remain available as bounded operational context
+- command text and stdout/stderr are **not shared with Copilot by default**
+- the user must explicitly enable the terminal's `Contexto IA` control before command/output text can enter workspace context
+- even after opt-in, recognized credentials, bearer tokens, private-key blocks, credential-bearing URLs, and other common secret shapes are redacted before model-facing context is built
+- the server strips terminal command/output fields again when `outputShared` is false, even if a modified client sends them
+- terminal history does not persist commands containing recognized secrets across sessions
+- Logbook summaries and nested evidence are redacted before persistence; older Logbook entries are sanitized when read if recognized secrets are found
+
+Redaction is defense in depth, not a promise to identify every possible confidential string. The explicit sharing boundary remains the primary control.
+
 ## Terminal execution
 
 The terminal uses pre-execution classification and direct child-process execution.
@@ -109,17 +123,17 @@ Model output is never itself an execution token.
 
 ## Evidence
 
-A conversational statement that an action completed is not sufficient evidence. ShipShell separates model output from operational outcomes and records mission/terminal evidence in the Logbook.
+A conversational statement that an action completed is not sufficient evidence. ShipShell separates model output from operational outcomes and records mission/terminal evidence in the Logbook. Recognized secret shapes are redacted before those entries are persisted or reused as semantic context.
 
 ## Validation
 
 Security-sensitive invariants are covered by multiple layers:
 
 - `npm run doctor` checks architecture and boundary assumptions
-- Vitest covers command policy, realpath/symlink containment, child-environment scrubbing, hardened Git execution, ShipSeal semantics, browser context, mission content, workspace context, modules, and runtime planning
+- Vitest covers command policy, realpath/symlink containment, child-environment scrubbing, hardened Git execution, ShipSeal semantics, terminal-context opt-in/redaction, Logbook sanitization, browser context, mission content, workspace context, modules, and runtime planning
 - TypeScript/Vite validates the production client build
 - `npm audit --audit-level=high` gates high-severity dependency findings
-- Playwright verifies behavioral boundaries, including context-off privacy and that a write command does not run until the explicit ShipSeal approval flow completes
+- Playwright verifies behavioral boundaries, including page-context privacy and that a write command does not run until the explicit ShipSeal approval flow completes
 
 CI runs these gates on pull requests.
 
@@ -139,6 +153,7 @@ The current security model does not claim to provide:
 
 - hostile multi-user server isolation
 - operating-system containment for explicitly approved arbitrary project code
+- perfect detection of every confidential string through redaction heuristics
 - secure password-manager functionality
 - unattended purchases or payments
 - unattended destructive account changes
