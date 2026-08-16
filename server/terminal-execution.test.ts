@@ -17,6 +17,7 @@ describe("buildTerminalEnvironment", () => {
       LD_PRELOAD: "/tmp/inject.so",
       GIT_CONFIG_COUNT: "1",
       GIT_SSH_COMMAND: "sh -c evil",
+      RIPGREP_CONFIG_PATH: "/tmp/rg-config",
       SSH_AUTH_SOCK: "/tmp/ssh-agent.sock",
     });
 
@@ -27,7 +28,7 @@ describe("buildTerminalEnvironment", () => {
       SSH_AUTH_SOCK: "/tmp/ssh-agent.sock",
       GIT_TERMINAL_PROMPT: "0",
     });
-    for (const key of ["OPENAI_API_KEY", "GITHUB_TOKEN", "INTERNAL_PASSWORD", "NPM_CONFIG_REGISTRY_AUTHTOKEN", "NODE_OPTIONS", "PYTHONPATH", "LD_PRELOAD", "GIT_CONFIG_COUNT", "GIT_SSH_COMMAND"]) {
+    for (const key of ["OPENAI_API_KEY", "GITHUB_TOKEN", "INTERNAL_PASSWORD", "NPM_CONFIG_REGISTRY_AUTHTOKEN", "NODE_OPTIONS", "PYTHONPATH", "LD_PRELOAD", "GIT_CONFIG_COUNT", "GIT_SSH_COMMAND", "RIPGREP_CONFIG_PATH"]) {
       expect(env[key]).toBeUndefined();
     }
   });
@@ -60,7 +61,15 @@ describe("buildTerminalExecutionArgs", () => {
     expect(args.slice(configIndex + 1)).toEqual(["--local", "--list"]);
   });
 
-  it("leaves non-Git command arguments unchanged", () => {
+  it("forces ripgrep to ignore ambient configuration files", () => {
+    expect(buildTerminalExecutionArgs(reviewCommand("rg ShipSeal src"), safeHooksPath)).toEqual([
+      "--no-config",
+      "ShipSeal",
+      "src",
+    ]);
+  });
+
+  it("leaves other non-Git command arguments unchanged", () => {
     const decision = reviewCommand("touch proof.txt");
     expect(buildTerminalExecutionArgs(decision, safeHooksPath)).toEqual(["proof.txt"]);
   });
