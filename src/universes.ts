@@ -17,6 +17,16 @@ export interface Universe {
 
 export const UNIVERSES: Universe[] = [
   {
+    id: "professional-graphite",
+    name: "Professional Graphite",
+    description: "Superficie sobria por defecto: navegador, Copilot, terminal y evidencia visibles sin atmósfera decorativa.",
+    workMode: "command",
+    theme: "obsidian",
+    voice: "executive",
+    density: "balanced",
+    shader: "none",
+  },
+  {
     id: "focus-minimal",
     name: "Focus Minimal",
     description: "Navegador al frente, casi cero ruido y copiloto discreto.",
@@ -78,7 +88,7 @@ export const UNIVERSES: Universe[] = [
   },
 ];
 
-export const DEFAULT_UNIVERSE_ID = "research-sunset";
+export const DEFAULT_UNIVERSE_ID = "professional-graphite";
 
 export function getUniverse(id: string | null | undefined): Universe {
   return UNIVERSES.find((universe) => universe.id === id) ?? UNIVERSES.find((universe) => universe.id === DEFAULT_UNIVERSE_ID)!;
