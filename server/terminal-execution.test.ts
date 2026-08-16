@@ -1,11 +1,19 @@
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { reviewCommand } from "./guard";
-import { buildTerminalEnvironment, buildTerminalExecutionArgs } from "./terminal-execution";
+import { buildExecutablePath, buildTerminalEnvironment, buildTerminalExecutionArgs } from "./terminal-execution";
 
 describe("buildTerminalEnvironment", () => {
-  it("removes secrets and process-injection variables while preserving narrow runtime values", () => {
+  it("removes secrets, process-injection variables, and workspace PATH entries", () => {
+    const workspace = path.resolve("/workspace/project");
+    const rawPath = [
+      path.join(workspace, "node_modules", ".bin"),
+      ".",
+      "/usr/local/bin",
+      "/usr/bin",
+    ].join(path.delimiter);
     const env = buildTerminalEnvironment({
-      PATH: "/usr/bin:/bin",
+      PATH: rawPath,
       HOME: "/home/user",
       LANG: "en_US.UTF-8",
       OPENAI_API_KEY: "secret",
@@ -21,10 +29,10 @@ describe("buildTerminalEnvironment", () => {
       GIT_PROTOCOL_FROM_USER: "1",
       RIPGREP_CONFIG_PATH: "/tmp/rg-config",
       SSH_AUTH_SOCK: "/tmp/ssh-agent.sock",
-    });
+    }, workspace);
 
     expect(env).toMatchObject({
-      PATH: "/usr/bin:/bin",
+      PATH: ["/usr/local/bin", "/usr/bin"].join(path.delimiter),
       HOME: "/home/user",
       LANG: "en_US.UTF-8",
       SSH_AUTH_SOCK: "/tmp/ssh-agent.sock",
@@ -35,6 +43,12 @@ describe("buildTerminalEnvironment", () => {
     for (const key of ["OPENAI_API_KEY", "GITHUB_TOKEN", "INTERNAL_PASSWORD", "NPM_CONFIG_REGISTRY_AUTHTOKEN", "NODE_OPTIONS", "PYTHONPATH", "LD_PRELOAD", "GIT_CONFIG_COUNT", "GIT_SSH_COMMAND", "RIPGREP_CONFIG_PATH"]) {
       expect(env[key]).toBeUndefined();
     }
+  });
+
+  it("deduplicates absolute executable paths and drops relative entries", () => {
+    const workspace = path.resolve("/workspace/project");
+    const rawPath = ["", ".", "bin", "/usr/bin", "/usr/bin", path.join(workspace, "tools")].join(path.delimiter);
+    expect(buildExecutablePath(rawPath, workspace)).toBe("/usr/bin");
   });
 });
 
