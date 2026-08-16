@@ -155,7 +155,7 @@ test('disabling page context prevents capture and still allows a context-free Co
   await expect(page.getByRole('button', { name: /Contexto inactivo/ })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Resume esta página' })).toBeDisabled();
 
-  await page.getByLabel('Preguntar al Copilot').fill('Dime hola sin leer la página');
+  await page.getByRole('textbox', { name: 'Preguntar al Copilot' }).fill('Dime hola sin leer la página');
   await page.getByRole('button', { name: 'Preguntar al Copilot' }).click();
 
   await expect(page.getByText('Hola desde Copilot sin contexto de página.')).toBeVisible();
