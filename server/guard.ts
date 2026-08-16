@@ -14,6 +14,19 @@ export interface CommandDecision {
 
 const FORBIDDEN_OPERATORS = /[;&|`$<>\n\r]/;
 const EXTERNAL_GIT = new Set(["fetch", "pull", "push", "clone"]);
+const LOCAL_GIT_WRITES = new Set([
+  "add",
+  "restore",
+  "reset",
+  "checkout",
+  "switch",
+  "commit",
+  "merge",
+  "rebase",
+  "cherry-pick",
+  "revert",
+  "clean",
+]);
 const BLOCKED_EXECUTABLES = new Set([
   "sudo", "su", "doas", "ssh", "scp", "sftp",
   "bash", "zsh", "sh", "fish",
@@ -22,6 +35,15 @@ const BLOCKED_EXECUTABLES = new Set([
 ]);
 const SEALED_LOCAL_TOOLS = new Set(["mkdir", "touch", "cp", "mv", "rm", "node", "python", "python3", "npx"]);
 const SAFE_READ_TOOLS = new Set(["cat", "head", "tail", "grep", "rg"]);
+const BLOCKED_READ_OPTIONS = new Set([
+  "-f",
+  "--file",
+  "--exclude-from",
+  "--ignore-file",
+  "--pre",
+  "--pre-glob",
+  "--hostname-bin",
+]);
 
 function tokenize(command: string): string[] | null {
   const tokens: string[] = [];
@@ -74,23 +96,59 @@ function allPathLikeArgsStayLocal(args: string[]): boolean {
   return args.every((arg) => isWorkspaceRelative(arg));
 }
 
+function optionName(arg: string): string {
+  const equals = arg.indexOf("=");
+  return equals >= 0 ? arg.slice(0, equals) : arg;
+}
+
+function hasBlockedReadOption(args: string[]): boolean {
+  return args.some((arg) => arg.startsWith("-") && BLOCKED_READ_OPTIONS.has(optionName(arg)));
+}
+
+function gitArgEscapesWorkspace(arg: string): boolean {
+  const equals = arg.startsWith("-") ? arg.indexOf("=") : -1;
+  const candidate = equals >= 0 ? arg.slice(equals + 1) : arg;
+  if (!candidate || candidate === "." || candidate.startsWith("-")) return false;
+  if (/^(?:https?|ssh|git):\/\//i.test(candidate) || /^[^/\s@]+@[^:\s]+:.+/.test(candidate)) return false;
+  return path.isAbsolute(candidate) || candidate.startsWith("~") || candidate.split(/[\\/]/).includes("..");
+}
+
+function gitArgsStayInsideWorkspace(args: string[]): boolean {
+  return !args.some(gitArgEscapesWorkspace);
+}
+
 function reviewGit(args: string[]): CommandDecision {
   const subcommand = args[0] ?? "";
   const rest = args.slice(1);
   const read = (reason: string): CommandDecision => ({ allowed: true, requiresSeal: false, risk: "read", executable: "git", args, reason });
   const write = (reason: string): CommandDecision => ({ allowed: true, requiresSeal: true, risk: "write", executable: "git", args, reason });
   const external = (reason: string): CommandDecision => ({ allowed: true, requiresSeal: true, risk: "external", executable: "git", args, reason });
+  const blocked = (reason: string): CommandDecision => ({ allowed: false, requiresSeal: true, risk: "blocked", reason });
 
   if (!subcommand || subcommand === "credential") {
-    return { allowed: false, requiresSeal: true, risk: "blocked", reason: "Ese comando Git no está expuesto por el puente vivo." };
+    return blocked("Ese comando Git no está expuesto por el puente vivo.");
   }
-  if (EXTERNAL_GIT.has(subcommand)) return external("Git con efecto remoto o de red: requiere ShipSeal de un solo uso.");
-  if (["status", "diff", "log", "show", "rev-parse"].includes(subcommand)) return read("Consulta Git de sólo lectura permitida.");
+
+  if (subcommand.startsWith("-")) {
+    return blocked("Las opciones globales de Git están bloqueadas porque pueden alterar configuración o ejecución antes del subcomando.");
+  }
+
+  if (!gitArgsStayInsideWorkspace(args)) {
+    return blocked("La maniobra Git referencia una ruta absoluta, el home o una ruta que sale del workspace.");
+  }
+
+  if (EXTERNAL_GIT.has(subcommand)) {
+    return external("Git con efecto remoto o de red: requiere ShipSeal de un solo uso.");
+  }
+
+  if (["status", "diff", "log", "show", "rev-parse"].includes(subcommand)) {
+    return read("Consulta Git de sólo lectura permitida.");
+  }
 
   if (subcommand === "branch") {
     const safeFlags = new Set(["--list", "-l", "-a", "--all", "-r", "--remotes", "-v", "-vv", "--show-current", "--contains", "--no-contains", "--merged", "--no-merged"]);
     if (rest.length === 0 || rest.every((arg) => arg.startsWith("-") && safeFlags.has(arg))) return read("Listado de ramas permitido.");
-    return write("Cambiar o crear ramas requiere ShipSeal.");
+    return write("Cambiar o crear ramas requiere ShipSeal. La operación puede activar comportamiento configurado por el repositorio.");
   }
 
   if (subcommand === "remote") {
@@ -100,7 +158,7 @@ function reviewGit(args: string[]): CommandDecision {
 
   if (subcommand === "config") {
     if (["--get", "--get-all", "--list", "-l"].includes(rest[0] ?? "")) return read("Lectura de configuración Git permitida.");
-    return write("Modificar configuración Git requiere ShipSeal.");
+    return blocked("Modificar configuración Git desde el terminal está bloqueado para impedir aliases, hooks o transportes que amplíen la capacidad del puente.");
   }
 
   if (subcommand === "tag") {
@@ -110,10 +168,14 @@ function reviewGit(args: string[]): CommandDecision {
 
   if (subcommand === "stash") {
     if (["list", "show"].includes(rest[0] ?? "")) return read("Consulta de stash permitida.");
-    return write("Modificar stash requiere ShipSeal.");
+    return write("Modificar stash requiere ShipSeal. La operación puede activar comportamiento configurado por el repositorio.");
   }
 
-  return write("Maniobra Git con posible mutación local: requiere ShipSeal de un solo uso.");
+  if (LOCAL_GIT_WRITES.has(subcommand)) {
+    return write("Mutación Git local: requiere ShipSeal. Revisa el repositorio porque hooks o filtros configurados pueden participar en algunas operaciones Git.");
+  }
+
+  return blocked("Subcomando Git aún no registrado en el puente vivo. Se bloquea por defecto en lugar de delegar capacidades desconocidas a Git.");
 }
 
 export function reviewCommand(command: string): CommandDecision {
@@ -158,8 +220,18 @@ export function reviewCommand(command: string): CommandDecision {
     return { allowed: true, requiresSeal: false, risk: "read", executable, args, reason: "Listado local permitido." };
   }
 
-  if (SAFE_READ_TOOLS.has(executable) && allPathLikeArgsStayLocal(args.filter((arg) => !arg.startsWith("-")))) {
-    return { allowed: true, requiresSeal: false, risk: "read", executable, args, reason: "Lectura de archivos del workspace permitida." };
+  if (SAFE_READ_TOOLS.has(executable)) {
+    if (hasBlockedReadOption(args)) {
+      return {
+        allowed: false,
+        requiresSeal: true,
+        risk: "blocked",
+        reason: `${executable} recibió una opción que puede cargar archivos auxiliares o ejecutar un preprocesador fuera del puente estrecho.`,
+      };
+    }
+    if (allPathLikeArgsStayLocal(args.filter((arg) => !arg.startsWith("-")))) {
+      return { allowed: true, requiresSeal: false, risk: "read", executable, args, reason: "Lectura de archivos del workspace permitida." };
+    }
   }
 
   if (executable === "git") return reviewGit(args);
