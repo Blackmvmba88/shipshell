@@ -1,3 +1,4 @@
+import { existsSync, realpathSync } from "node:fs";
 import path from "node:path";
 
 export type CommandRisk = "read" | "session" | "write" | "external" | "blocked";
@@ -34,6 +35,7 @@ const BLOCKED_EXECUTABLES = new Set([
   "dd", "diskutil", "mount", "umount", "launchctl",
 ]);
 const SEALED_LOCAL_TOOLS = new Set(["mkdir", "touch", "cp", "mv", "rm", "node", "python", "python3", "npx"]);
+const FILE_MUTATION_TOOLS = new Set(["mkdir", "touch", "cp", "mv", "rm"]);
 const SAFE_READ_TOOLS = new Set(["cat", "head", "tail", "grep", "rg"]);
 const BLOCKED_READ_OPTIONS = new Set([
   "-f",
@@ -115,6 +117,52 @@ function gitArgEscapesWorkspace(arg: string): boolean {
 
 function gitArgsStayInsideWorkspace(args: string[]): boolean {
   return !args.some(gitArgEscapesWorkspace);
+}
+
+function isInsideWorkspace(workspace: string, candidate: string): boolean {
+  const relative = path.relative(workspace, candidate);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function nearestExistingRealPath(candidate: string): { ancestor: string; realAncestor: string } | null {
+  let cursor = candidate;
+  for (;;) {
+    if (existsSync(cursor)) {
+      try {
+        return { ancestor: cursor, realAncestor: realpathSync(cursor) };
+      } catch {
+        return null;
+      }
+    }
+    const parent = path.dirname(cursor);
+    if (parent === cursor) return null;
+    cursor = parent;
+  }
+}
+
+function resolvesInsideWorkspace(workspace: string, cwd: string, value: string): boolean {
+  if (!value || value === "." || value.startsWith("-")) return true;
+  if (/^(?:https?|ssh|git):\/\//i.test(value) || /^[^/\s@]+@[^:\s]+:.+/.test(value)) return true;
+
+  const candidate = path.resolve(cwd, value);
+  if (!isInsideWorkspace(workspace, candidate)) return false;
+  const nearest = nearestExistingRealPath(candidate);
+  if (!nearest) return false;
+  const suffix = path.relative(nearest.ancestor, candidate);
+  const effective = path.resolve(nearest.realAncestor, suffix);
+  return isInsideWorkspace(workspace, effective);
+}
+
+function decisionPathArgs(decision: CommandDecision): string[] {
+  if (decision.builtin === "cd") return decision.args ?? ["."];
+  if (!decision.executable) return [];
+  if (decision.executable === "ls" || SAFE_READ_TOOLS.has(decision.executable) || FILE_MUTATION_TOOLS.has(decision.executable)) {
+    return (decision.args ?? []).filter((arg) => !arg.startsWith("-"));
+  }
+  if (decision.executable === "git") {
+    return (decision.args ?? []).slice(1).filter((arg) => !arg.startsWith("-"));
+  }
+  return [];
 }
 
 function reviewGit(args: string[]): CommandDecision {
@@ -256,8 +304,7 @@ export function reviewCommand(command: string): CommandDecision {
   }
 
   if (SEALED_LOCAL_TOOLS.has(executable)) {
-    const fileTools = new Set(["mkdir", "touch", "cp", "mv", "rm"]);
-    if (fileTools.has(executable) && !allPathLikeArgsStayLocal(args.filter((arg) => !arg.startsWith("-")))) {
+    if (FILE_MUTATION_TOOLS.has(executable) && !allPathLikeArgsStayLocal(args.filter((arg) => !arg.startsWith("-")))) {
       return { allowed: false, requiresSeal: true, risk: "blocked", reason: "La maniobra intenta salir del workspace." };
     }
     return {
@@ -278,13 +325,32 @@ export function reviewCommand(command: string): CommandDecision {
   };
 }
 
+export function reviewCommandInWorkspace(command: string, workspace: string, cwd: string): CommandDecision {
+  const decision = reviewCommand(command);
+  if (!decision.allowed) return decision;
+  const pathArgs = decisionPathArgs(decision);
+  if (!pathArgs.every((arg) => resolvesInsideWorkspace(workspace, cwd, arg))) {
+    return {
+      allowed: false,
+      requiresSeal: decision.requiresSeal,
+      risk: "blocked",
+      reason: "La maniobra atraviesa un symlink o una ruta real que sale del workspace.",
+    };
+  }
+  return decision;
+}
+
 export function resolveWorkspace(root: string): string {
-  return path.resolve(root);
+  return realpathSync(path.resolve(root));
 }
 
 export function resolveTerminalDirectory(workspace: string, current: string, target = "."): string | null {
-  const next = path.resolve(current, target || ".");
-  const relative = path.relative(workspace, next);
-  if (relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative))) return next;
-  return null;
+  const candidate = path.resolve(current, target || ".");
+  if (!isInsideWorkspace(workspace, candidate)) return null;
+  try {
+    const next = realpathSync(candidate);
+    return isInsideWorkspace(workspace, next) ? next : null;
+  } catch {
+    return null;
+  }
 }
