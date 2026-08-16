@@ -23,6 +23,13 @@ describe("ShipShell universes", () => {
     }
   });
 
+  it("uses the calm professional surface as the canonical default", () => {
+    expect(DEFAULT_UNIVERSE_ID).toBe("professional-graphite");
+    const defaultUniverse = getUniverse(DEFAULT_UNIVERSE_ID);
+    expect(defaultUniverse.theme).toBe("obsidian");
+    expect(defaultUniverse.shader).toBe("none");
+  });
+
   it("falls back to the canonical default universe", () => {
     expect(getUniverse("does-not-exist").id).toBe(DEFAULT_UNIVERSE_ID);
   });
