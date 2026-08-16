@@ -4,6 +4,7 @@ import { shipModuleSchema } from "./copilot-profile.js";
 const terminalContextSchema = z.object({
   cwd: z.string().max(1000),
   running: z.boolean(),
+  outputShared: z.boolean(),
   lastCommand: z.string().max(1000).optional(),
   outputTail: z.string().max(8000).optional(),
 }).optional();
