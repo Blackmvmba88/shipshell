@@ -1,0 +1,4 @@
+:root {
+  --green: var(--accent);
+  --cyan: var(--info);
+}

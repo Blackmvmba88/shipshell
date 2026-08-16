@@ -1,0 +1,275 @@
+.workspace {
+  grid-template-columns: minmax(620px, 1fr) 380px;
+}
+
+.topbar {
+  background: rgba(7, 10, 8, .96);
+}
+
+.radar {
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .035);
+  border-color: rgba(255, 255, 255, .09);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, .16);
+}
+
+.browser-panel {
+  padding: 14px 16px 16px;
+}
+
+.panel-heading {
+  margin-bottom: 10px;
+}
+
+.ports {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 9px;
+}
+
+.ports button {
+  min-height: 45px;
+  padding: 7px;
+  gap: 7px;
+  border-radius: 8px;
+}
+
+.ports button > span {
+  width: 25px;
+  height: 25px;
+}
+
+.ports small {
+  display: none;
+}
+
+.browser-frame {
+  height: calc(100% - 91px);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, .2);
+}
+
+.tab-strip {
+  height: 36px;
+  padding-top: 5px;
+  background: #070a08;
+}
+
+.tab-strip button {
+  height: 30px;
+  border-radius: 8px 8px 0 0;
+}
+
+.browser-toolbar {
+  height: 39px;
+  background: rgba(255, 255, 255, .025);
+}
+
+.copilot-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: linear-gradient(180deg, rgba(12, 16, 13, .98), rgba(6, 10, 8, .98));
+  border-left: 1px solid rgba(255, 255, 255, .055);
+}
+
+.copilot-title {
+  padding-bottom: 12px;
+}
+
+.copilot-title > svg {
+  width: 20px;
+  height: 20px;
+  color: #dff7e7;
+}
+
+.copilot-title strong {
+  font-size: 13px;
+}
+
+.copilot-context-card {
+  padding: 11px;
+  border: 1px solid rgba(255, 255, 255, .075);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .028);
+}
+
+.context-source {
+  display: flex;
+  gap: 9px;
+  min-width: 0;
+}
+
+.context-source > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--cyan);
+}
+
+.context-source > div {
+  min-width: 0;
+}
+
+.context-source span,
+.context-source strong,
+.context-source small {
+  display: block;
+}
+
+.context-source span {
+  color: #6f8176;
+  font: 8px 'IBM Plex Mono';
+  letter-spacing: .12em;
+}
+
+.context-source strong {
+  margin-top: 4px;
+  overflow: hidden;
+  color: #e6f1e9;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-source small {
+  margin-top: 4px;
+  overflow: hidden;
+  color: #75877c;
+  font: 8px 'IBM Plex Mono';
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 255, 255, .09);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .03);
+  color: #839288;
+  font: 8px 'IBM Plex Mono';
+  cursor: pointer;
+}
+
+.context-toggle.on {
+  border-color: rgba(57, 247, 154, .24);
+  background: rgba(57, 247, 154, .065);
+  color: #aef4ca;
+}
+
+.selection-chip {
+  display: inline-block;
+  margin: 8px 0 0 6px;
+  color: var(--cyan);
+  font: 8px 'IBM Plex Mono';
+}
+
+.copilot-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.copilot-quick-actions button {
+  padding: 7px 9px;
+  border: 1px solid rgba(255, 255, 255, .075);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .025);
+  color: #a8b7ad;
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.copilot-quick-actions button:hover:not(:disabled) {
+  border-color: rgba(76, 227, 255, .25);
+  color: #e4f5e9;
+}
+
+.copilot-quick-actions button:disabled {
+  cursor: default;
+  opacity: .32;
+}
+
+.copilot-message {
+  min-height: 110px;
+  max-height: 260px;
+  margin-top: 0;
+  overflow: auto;
+  padding-right: 8px;
+}
+
+.copilot-message p {
+  margin-bottom: 0;
+}
+
+.copilot-form {
+  position: relative;
+  display: grid;
+  grid-template-columns: 20px 1fr 32px;
+  align-items: end;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, .10);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, .04);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .18);
+}
+
+.copilot-form > svg {
+  align-self: start;
+  margin-top: 4px;
+  color: var(--green);
+}
+
+.copilot-form textarea {
+  width: 100%;
+  min-height: 56px;
+  max-height: 130px;
+  resize: vertical;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #edf6f0;
+  font: 11px/1.5 Inter, system-ui, sans-serif;
+}
+
+.copilot-form textarea::placeholder {
+  color: #64736a;
+}
+
+.copilot-form button {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(57, 247, 154, .22);
+  border-radius: 9px;
+  background: rgba(57, 247, 154, .09);
+  color: var(--green);
+  cursor: pointer;
+}
+
+.copilot-form button:disabled {
+  opacity: .35;
+  cursor: default;
+}
+
+.copilot-panel .evidence,
+.copilot-panel .mission-stats {
+  margin-top: 0;
+}
+
+@media (max-width: 1240px) {
+  .workspace {
+    grid-template-columns: minmax(560px, 1fr) 330px;
+  }
+
+  .ports {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

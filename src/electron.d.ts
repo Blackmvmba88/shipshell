@@ -12,6 +12,42 @@ interface ShipShellBrowserState {
   tabs: ShipShellTab[];
 }
 
+type ShipShellAnnotationMode = "off" | "underline" | "circle" | "glow";
+
+interface ShipShellVisualAnchor {
+  id: string;
+  kind: Exclude<ShipShellAnnotationMode, "off">;
+  text: string;
+  tag: string;
+  role: string;
+  ariaLabel: string;
+  href: string;
+  elementId?: string;
+  testId?: string;
+  name?: string;
+  note?: string;
+  resolved?: boolean;
+  rect: { x: number; y: number; width: number; height: number };
+  createdAt: string;
+}
+
+interface ShipShellVisualContext {
+  available: boolean;
+  imageDataUrl: string;
+  error?: string;
+}
+
+interface ShipShellPageContext {
+  available: boolean;
+  title: string;
+  url: string;
+  selection: string;
+  text: string;
+  error?: string;
+  anchors?: ShipShellVisualAnchor[];
+  visual?: ShipShellVisualContext;
+}
+
 interface Window {
   shipShellBrowser?: {
     isNative: true;
@@ -22,6 +58,12 @@ interface Window {
     back(): Promise<unknown>;
     forward(): Promise<unknown>;
     reload(): Promise<unknown>;
+    getPageContext(): Promise<ShipShellPageContext>;
+    setAnnotationMode(mode: ShipShellAnnotationMode): Promise<{ mode: ShipShellAnnotationMode; anchors: ShipShellVisualAnchor[] }>;
+    clearAnnotations(): Promise<ShipShellVisualAnchor[]>;
+    getAnnotations(): Promise<ShipShellVisualAnchor[]>;
+    setAnnotationNote(number: number, note: string): Promise<ShipShellVisualAnchor[]>;
+    focusAnnotations(numbers: number[]): Promise<{ focused: number[]; anchors: ShipShellVisualAnchor[] }>;
     setBounds(bounds: { x: number; y: number; width: number; height: number }): void;
     setVisible(visible: boolean): void;
     onState(listener: (state: ShipShellBrowserState) => void): () => void;
