@@ -1,43 +1,182 @@
-.selectable-module,.selectable-submodule,.live-terminal{transition:border-color .16s ease,box-shadow .16s ease,opacity .16s ease,transform .16s ease}
-.selectable-module,.selectable-submodule,[data-module="terminal"]{position:relative}
-.module-selected{border-color:color-mix(in srgb,var(--cyan) 48%,transparent)!important;box-shadow:0 0 0 1px color-mix(in srgb,var(--cyan) 18%,transparent),0 12px 34px rgba(0,0,0,.12)}
-.module-selected::after{content:"ACTIVE";position:absolute;z-index:10;top:7px;right:8px;padding:2px 5px;border:1px solid color-mix(in srgb,var(--cyan) 30%,transparent);background:rgba(4,12,12,.78);color:var(--cyan);font:700 7px var(--font-mono);letter-spacing:.12em;pointer-events:none}
-.ports.module-selected::after{top:5px;right:5px}
-.module-status{height:28px;display:flex;align-items:center;gap:7px;padding:0 9px;border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.025);font-family:var(--font-mono);white-space:nowrap}
-.module-status strong{font-size:8px;letter-spacing:.12em;color:var(--cyan);text-transform:uppercase}
-.module-status span{font-size:7px;color:var(--muted);letter-spacing:.08em}
-.panel-actions{display:flex;align-items:center;gap:8px}
-.module-expand{width:27px;height:27px;display:grid;place-items:center;padding:0;border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.025);color:var(--muted);cursor:pointer}
-.module-expand:hover{color:var(--cyan);border-color:color-mix(in srgb,var(--cyan) 28%,transparent)}
-.crew-title .module-expand{margin-left:auto;margin-right:4px}
+.selectable-module,
+.selectable-submodule,
+.live-terminal {
+  transition: border-color .16s ease, box-shadow .16s ease, opacity .16s ease, transform .16s ease;
+}
 
-.app-shell[data-active-module="browser"] .browser-frame{box-shadow:0 0 0 1px color-mix(in srgb,var(--cyan) 14%,transparent)}
-.app-shell[data-active-module="ports"] .browser-frame{opacity:.82}
-.app-shell[data-active-module="copilot"] .browser-panel,.app-shell[data-active-module="terminal"] .browser-panel{opacity:.9}
-.app-shell[data-active-module="terminal"] .copilot-panel{opacity:.88}
+.selectable-module,
+.selectable-submodule,
+[data-module="terminal"] {
+  position: relative;
+}
+
+.module-selected {
+  border-color: color-mix(in srgb, var(--cyan) 42%, transparent) !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--cyan) 12%, transparent), 0 12px 34px rgba(0, 0, 0, .12);
+}
+
+.module-selected::after {
+  content: "";
+  position: absolute;
+  z-index: 10;
+  top: 10px;
+  right: 10px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cyan) 12%, transparent);
+  pointer-events: none;
+}
+
+.ports.module-selected::after {
+  top: 8px;
+  right: 8px;
+}
+
+.module-status {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--surface-2) 88%, transparent);
+  font-family: var(--mono);
+  white-space: nowrap;
+}
+
+.module-status strong {
+  font-size: 8px;
+  letter-spacing: .08em;
+  color: var(--cyan);
+}
+
+.module-status span {
+  font-size: 7px;
+  color: var(--muted);
+  letter-spacing: .06em;
+}
+
+.panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.module-expand {
+  width: 27px;
+  height: 27px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--surface-2) 88%, transparent);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.module-expand:hover {
+  color: var(--cyan);
+  border-color: color-mix(in srgb, var(--cyan) 28%, transparent);
+}
+
+.crew-title .module-expand {
+  margin-left: auto;
+  margin-right: 4px;
+}
+
+.app-shell[data-active-module="browser"] .browser-frame {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--cyan) 12%, transparent);
+}
+
+.app-shell[data-active-module="ports"] .browser-frame { opacity: .86; }
+.app-shell[data-active-module="copilot"] .browser-panel,
+.app-shell[data-active-module="terminal"] .browser-panel { opacity: .94; }
+.app-shell[data-active-module="terminal"] .copilot-panel { opacity: .92; }
 
 .app-shell[data-expanded-module="browser"] .workspace,
-.app-shell[data-expanded-module="logbook"] .workspace{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+.app-shell[data-expanded-module="logbook"] .workspace {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
 .app-shell[data-expanded-module="browser"] .copilot-panel,
 .app-shell[data-expanded-module="browser"] .live-terminal,
 .app-shell[data-expanded-module="logbook"] .copilot-panel,
-.app-shell[data-expanded-module="logbook"] .live-terminal{display:none}
+.app-shell[data-expanded-module="logbook"] .live-terminal {
+  display: none;
+}
+
 .app-shell[data-expanded-module="browser"] .browser-panel,
-.app-shell[data-expanded-module="logbook"] .browser-panel{grid-column:1;grid-row:1;min-width:0}
+.app-shell[data-expanded-module="logbook"] .browser-panel {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+}
 
-.app-shell[data-expanded-module="copilot"] .workspace{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
-.app-shell[data-expanded-module="copilot"] .browser-panel,.app-shell[data-expanded-module="copilot"] .live-terminal{display:none}
-.app-shell[data-expanded-module="copilot"] .copilot-panel{grid-column:1;grid-row:1;max-width:none;width:auto;min-height:0;overflow:auto}
+.app-shell[data-expanded-module="copilot"] .workspace {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
 
-.app-shell[data-expanded-module="terminal"] .workspace{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
-.app-shell[data-expanded-module="terminal"] .browser-panel,.app-shell[data-expanded-module="terminal"] .copilot-panel{display:none}
-.app-shell[data-expanded-module="terminal"] .live-terminal{grid-column:1;grid-row:1;min-height:0;height:auto}
-.app-shell[data-expanded-module="terminal"] .live-terminal pre{min-height:0;height:100%;font-size:12px;line-height:1.55}
+.app-shell[data-expanded-module="copilot"] .browser-panel,
+.app-shell[data-expanded-module="copilot"] .live-terminal {
+  display: none;
+}
 
-.app-shell[data-expanded-module="ports"] .browser-frame{display:none}
-.app-shell[data-expanded-module="ports"] .browser-panel{display:flex;flex-direction:column}
-.app-shell[data-expanded-module="ports"] .ports{flex:1;grid-template-columns:repeat(3,minmax(140px,1fr));align-content:center;padding:clamp(18px,5vw,70px)}
-.app-shell[data-expanded-module="ports"] .ports>button{min-height:110px}
+.app-shell[data-expanded-module="copilot"] .copilot-panel {
+  grid-column: 1;
+  grid-row: 1;
+  max-width: none;
+  width: auto;
+  min-height: 0;
+  overflow: auto;
+}
 
-@media(max-width:1080px){.module-status{display:none}.app-shell[data-expanded-module="ports"] .ports{grid-template-columns:repeat(2,minmax(130px,1fr))}}
-@media(prefers-reduced-motion:reduce){.selectable-module,.selectable-submodule,.live-terminal{transition:none}}
+.app-shell[data-expanded-module="terminal"] .workspace {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.app-shell[data-expanded-module="terminal"] .browser-panel,
+.app-shell[data-expanded-module="terminal"] .copilot-panel {
+  display: none;
+}
+
+.app-shell[data-expanded-module="terminal"] .live-terminal {
+  grid-column: 1;
+  grid-row: 1;
+  min-height: 0;
+  height: auto;
+}
+
+.app-shell[data-expanded-module="terminal"] .live-terminal pre {
+  min-height: 0;
+  height: 100%;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.app-shell[data-expanded-module="ports"] .browser-frame { display: none; }
+.app-shell[data-expanded-module="ports"] .browser-panel { display: flex; flex-direction: column; }
+.app-shell[data-expanded-module="ports"] .ports {
+  flex: 1;
+  grid-template-columns: repeat(3, minmax(140px, 1fr));
+  align-content: center;
+  padding: clamp(18px, 5vw, 70px);
+}
+.app-shell[data-expanded-module="ports"] .ports > button { min-height: 110px; }
+
+@media (max-width: 1080px) {
+  .module-status { display: none; }
+  .app-shell[data-expanded-module="ports"] .ports { grid-template-columns: repeat(2, minmax(130px, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .selectable-module,
+  .selectable-submodule,
+  .live-terminal { transition: none; }
+}
