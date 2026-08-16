@@ -11,6 +11,7 @@ describe("buildTerminalEnvironment", () => {
       OPENAI_API_KEY: "secret",
       GITHUB_TOKEN: "token",
       INTERNAL_PASSWORD: "password",
+      NPM_CONFIG_REGISTRY_AUTHTOKEN: "npm-secret",
       NODE_OPTIONS: "--require ./inject.js",
       PYTHONPATH: "/tmp/inject",
       LD_PRELOAD: "/tmp/inject.so",
@@ -26,7 +27,7 @@ describe("buildTerminalEnvironment", () => {
       SSH_AUTH_SOCK: "/tmp/ssh-agent.sock",
       GIT_TERMINAL_PROMPT: "0",
     });
-    for (const key of ["OPENAI_API_KEY", "GITHUB_TOKEN", "INTERNAL_PASSWORD", "NODE_OPTIONS", "PYTHONPATH", "LD_PRELOAD", "GIT_CONFIG_COUNT", "GIT_SSH_COMMAND"]) {
+    for (const key of ["OPENAI_API_KEY", "GITHUB_TOKEN", "INTERNAL_PASSWORD", "NPM_CONFIG_REGISTRY_AUTHTOKEN", "NODE_OPTIONS", "PYTHONPATH", "LD_PRELOAD", "GIT_CONFIG_COUNT", "GIT_SSH_COMMAND"]) {
       expect(env[key]).toBeUndefined();
     }
   });
@@ -50,6 +51,13 @@ describe("buildTerminalExecutionArgs", () => {
       expect(args).toContain("--no-ext-diff");
       expect(args).toContain("--no-textconv");
     }
+  });
+
+  it("scopes unsealed Git config reads to repository-local configuration", () => {
+    const args = buildTerminalExecutionArgs(reviewCommand("git config --list"), safeHooksPath);
+    const configIndex = args.indexOf("config");
+    expect(configIndex).toBeGreaterThan(-1);
+    expect(args.slice(configIndex + 1)).toEqual(["--local", "--list"]);
   });
 
   it("leaves non-Git command arguments unchanged", () => {
