@@ -1,4 +1,5 @@
 :root {
   --green: var(--accent);
   --cyan: var(--info);
+  --font-mono: var(--mono);
 }
