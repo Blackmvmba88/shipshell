@@ -7,7 +7,10 @@ const terminalContextSchema = z.object({
   outputShared: z.boolean(),
   lastCommand: z.string().max(1000).optional(),
   outputTail: z.string().max(8000).optional(),
-}).optional();
+}).transform((context) => context.outputShared
+  ? context
+  : { ...context, lastCommand: undefined, outputTail: undefined })
+  .optional();
 
 const logEntrySchema = z.object({
   event: z.enum(["mission", "terminal", "system"]),
