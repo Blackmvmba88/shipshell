@@ -57,6 +57,7 @@ export interface MissionProfile {
 export interface TerminalSemanticContext {
   cwd: string;
   running: boolean;
+  outputShared: boolean;
   lastCommand?: string;
   outputTail?: string;
 }
@@ -145,14 +146,23 @@ async function runCommandStream(
     }
   }
 
-  buffer += decoder.decode();
   if (buffer.trim()) onEvent(JSON.parse(buffer) as TerminalStreamEvent);
 }
 
 export const api = {
   health: () => request<Health>("/api/health"),
   logbook: () => request<{ entries: LogEntry[] }>("/api/logbook"),
-  mission: (input: string, context?: MissionContext, profile?: MissionProfile, workspace?: WorkspaceContext) => request<{ decision: { kind: string; normalizedInput: string }; answer?: string }>("/api/missions", {
+  mission: (
+    input: string,
+    context?: MissionContext,
+    profile?: MissionProfile,
+    workspace?: Omit<WorkspaceContext, "logbook">,
+  ) => request<{
+    decision: { kind: string; normalizedInput: string };
+    answer?: string;
+    responseId?: string;
+    entry?: LogEntry;
+  }>("/api/missions", {
     method: "POST",
     body: JSON.stringify({ input, context, profile, workspace: workspace ?? buildClientWorkspaceContext() }),
   }),
