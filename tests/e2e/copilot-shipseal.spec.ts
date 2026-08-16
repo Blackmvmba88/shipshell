@@ -108,7 +108,7 @@ test('Copilot sends bounded page context and focuses referenced anchors', async 
   });
 
   await page.goto('/');
-  await expect(page.getByText('Demo checkout')).toBeVisible();
+  await expect(page.locator('.copilot-context-card').getByText('Demo checkout', { exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'Resume esta página' }).click();
 
