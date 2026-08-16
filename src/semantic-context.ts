@@ -11,14 +11,14 @@ const GITHUB_TOKEN = /\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20
 const NPM_TOKEN = /\bnpm_[A-Za-z0-9]{20,}\b/g;
 const AWS_ACCESS_KEY = /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g;
 const JWT = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g;
-const CREDENTIAL_URL = /\b(https?:\/\/)([^\s/@:]+):([^\s/@]+)@/gi;
+const URL_USERINFO = /\b(https?:\/\/)([^/\s@]+)@/gi;
 const PRIVATE_KEY_BLOCK = /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/g;
 
 export function redactTerminalContextText(value: string | undefined): string | undefined {
   if (!value) return value;
   return value
     .replace(PRIVATE_KEY_BLOCK, "[REDACTED PRIVATE KEY]")
-    .replace(CREDENTIAL_URL, `$1${REDACTION}:${REDACTION}@`)
+    .replace(URL_USERINFO, `$1${REDACTION}@`)
     .replace(BEARER_TOKEN, `Bearer ${REDACTION}`)
     .replace(SECRET_ASSIGNMENT, (_match, name: string, separator: string) => `${name}${separator}${REDACTION}`)
     .replace(OPENAI_KEY, REDACTION)
@@ -30,9 +30,11 @@ export function redactTerminalContextText(value: string | undefined): string | u
 
 export function publishTerminalContext(context: TerminalSemanticContext) {
   terminalContext = {
-    ...context,
-    lastCommand: redactTerminalContextText(context.lastCommand),
-    outputTail: redactTerminalContextText(context.outputTail?.slice(-8000)),
+    cwd: context.cwd,
+    running: context.running,
+    outputShared: context.outputShared,
+    lastCommand: context.outputShared ? redactTerminalContextText(context.lastCommand) : undefined,
+    outputTail: context.outputShared ? redactTerminalContextText(context.outputTail?.slice(-8000)) : undefined,
   };
 }
 
