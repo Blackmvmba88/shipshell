@@ -1,5 +1,6 @@
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
 import { Activity, Eye, EyeOff, Maximize2, ShieldCheck, TerminalSquare, X } from "lucide-react";
+import { containsRecognizedSecret } from "../shared/redaction";
 import { api, type TerminalPreview, type TerminalStreamEvent } from "./api";
 import { publishTerminalContext } from "./semantic-context";
 import "./terminal.css";
@@ -10,9 +11,15 @@ const MAX_HISTORY = 100;
 function readHistory(): string[] {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(HISTORY_KEY) ?? "[]");
-    return Array.isArray(parsed)
-      ? parsed.filter((item): item is string => typeof item === "string").slice(-MAX_HISTORY)
-      : [];
+    if (!Array.isArray(parsed)) return [];
+    const history = parsed
+      .filter((item): item is string => typeof item === "string")
+      .slice(-MAX_HISTORY);
+    const safeHistory = history.filter((item) => !containsRecognizedSecret(item));
+    if (safeHistory.length !== history.length) {
+      window.localStorage.setItem(HISTORY_KEY, JSON.stringify(safeHistory));
+    }
+    return safeHistory;
   } catch {
     return [];
   }
@@ -90,7 +97,8 @@ export function LiveTerminal({
     setLastCommand(normalized);
     setHistory((current) => {
       const next = [...current.filter((item) => item !== normalized), normalized].slice(-MAX_HISTORY);
-      window.localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+      const persistentHistory = next.filter((item) => !containsRecognizedSecret(item));
+      window.localStorage.setItem(HISTORY_KEY, JSON.stringify(persistentHistory));
       return next;
     });
     setHistoryIndex(null);
