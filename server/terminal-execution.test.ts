@@ -3,7 +3,7 @@ import { reviewCommand } from "./guard";
 import { buildTerminalEnvironment, buildTerminalExecutionArgs } from "./terminal-execution";
 
 describe("buildTerminalEnvironment", () => {
-  it("removes secrets and process-injection variables while preserving normal runtime values", () => {
+  it("removes secrets and process-injection variables while preserving narrow runtime values", () => {
     const env = buildTerminalEnvironment({
       PATH: "/usr/bin:/bin",
       HOME: "/home/user",
@@ -17,6 +17,8 @@ describe("buildTerminalEnvironment", () => {
       LD_PRELOAD: "/tmp/inject.so",
       GIT_CONFIG_COUNT: "1",
       GIT_SSH_COMMAND: "sh -c evil",
+      GIT_ALLOW_PROTOCOL: "ext:file:https",
+      GIT_PROTOCOL_FROM_USER: "1",
       RIPGREP_CONFIG_PATH: "/tmp/rg-config",
       SSH_AUTH_SOCK: "/tmp/ssh-agent.sock",
     });
@@ -27,6 +29,8 @@ describe("buildTerminalEnvironment", () => {
       LANG: "en_US.UTF-8",
       SSH_AUTH_SOCK: "/tmp/ssh-agent.sock",
       GIT_TERMINAL_PROMPT: "0",
+      GIT_ALLOW_PROTOCOL: "https:http:ssh:git",
+      GIT_PROTOCOL_FROM_USER: "0",
     });
     for (const key of ["OPENAI_API_KEY", "GITHUB_TOKEN", "INTERNAL_PASSWORD", "NPM_CONFIG_REGISTRY_AUTHTOKEN", "NODE_OPTIONS", "PYTHONPATH", "LD_PRELOAD", "GIT_CONFIG_COUNT", "GIT_SSH_COMMAND", "RIPGREP_CONFIG_PATH"]) {
       expect(env[key]).toBeUndefined();
