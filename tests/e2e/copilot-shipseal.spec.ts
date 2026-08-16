@@ -55,6 +55,7 @@ async function installNativeBrowserStub(page: Page) {
 
     Object.assign(window, {
       __shipShellFocusCalls: [] as number[][],
+      __shipShellContextCalls: 0,
       shipShellBrowser: {
         isNative: true,
         navigate: async () => ({}),
@@ -64,15 +65,19 @@ async function installNativeBrowserStub(page: Page) {
         back: async () => ({}),
         forward: async () => ({}),
         reload: async () => ({}),
-        getPageContext: async () => ({
-          available: true,
-          title: 'Demo checkout',
-          url: 'https://example.test/checkout',
-          selection: 'Continue checkout',
-          text: 'Order total $42. Continue checkout. Cancel.',
-          anchors: [anchor],
-          visual: { available: false, imageDataUrl: '' },
-        }),
+        getPageContext: async () => {
+          const testWindow = window as unknown as { __shipShellContextCalls: number };
+          testWindow.__shipShellContextCalls += 1;
+          return {
+            available: true,
+            title: 'Demo checkout',
+            url: 'https://example.test/checkout',
+            selection: 'Continue checkout',
+            text: 'Order total $42. Continue checkout. Cancel.',
+            anchors: [anchor],
+            visual: { available: false, imageDataUrl: '' },
+          };
+        },
         setAnnotationMode: async (mode: string) => ({ mode, anchors: [anchor] }),
         clearAnnotations: async () => [],
         getAnnotations: async () => [anchor],
@@ -124,6 +129,42 @@ test('Copilot sends bounded page context and focuses referenced anchors', async 
   await expect.poll(async () => page.evaluate(() => (
     window as unknown as { __shipShellFocusCalls: number[][] }
   ).__shipShellFocusCalls)).toEqual([[1]]);
+  expect(await page.evaluate(() => (
+    window as unknown as { __shipShellContextCalls: number }
+  ).__shipShellContextCalls)).toBe(1);
+});
+
+test('disabling page context prevents capture and still allows a context-free Copilot mission', async ({ page }) => {
+  await installNativeBrowserStub(page);
+  await mockBaseApi(page);
+
+  let missionBody: Record<string, unknown> | undefined;
+  await page.route('**/api/missions', async (route) => {
+    missionBody = route.request().postDataJSON() as Record<string, unknown>;
+    await route.fulfill({
+      json: {
+        decision: { kind: 'answer', normalizedInput: 'Dime hola sin leer la página' },
+        answer: 'Hola desde Copilot sin contexto de página.',
+      },
+    });
+  });
+
+  await page.goto('/');
+  const contextToggle = page.getByRole('button', { name: /Contexto activo/ });
+  await contextToggle.click();
+  await expect(page.getByRole('button', { name: /Contexto inactivo/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Resume esta página' })).toBeDisabled();
+
+  await page.getByLabel('Preguntar al Copilot').fill('Dime hola sin leer la página');
+  await page.getByRole('button', { name: 'Preguntar al Copilot' }).click();
+
+  await expect(page.getByText('Hola desde Copilot sin contexto de página.')).toBeVisible();
+  await expect.poll(() => missionBody).toBeTruthy();
+  expect(missionBody?.context).toBeUndefined();
+  expect((missionBody?.profile as Record<string, unknown>).activeModule).toBe('copilot');
+  expect(await page.evaluate(() => (
+    window as unknown as { __shipShellContextCalls: number }
+  ).__shipShellContextCalls)).toBe(0);
 });
 
 test('ShipSeal requires explicit approval before a write command runs', async ({ page }) => {
