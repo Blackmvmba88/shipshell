@@ -88,7 +88,7 @@ function App() {
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [input, setInput] = useState("");
   const [copilotInput, setCopilotInput] = useState("");
-  const [answer, setAnswer] = useState("Voy contigo. Abre una página y pregúntame lo que quieras sobre ella.");
+  const [answer, setAnswer] = useState("ShipShell listo. Abre una página o define una misión.");
   const [url, setUrl] = useState(boot.url);
   const [busy, setBusy] = useState(false);
   const [contextEnabled, setContextEnabled] = useState(true);
@@ -170,7 +170,10 @@ function App() {
     return () => { observer.disconnect(); window.removeEventListener("resize", updateBounds); };
   }, [nativeBrowser, browserSlot, activeDeck, universe.id, expandedModule, activeModule]);
 
-  const status = useMemo(() => health?.aiConfigured ? "COPILOTO EN LÍNEA" : "MODO LOCAL", [health]);
+  const status = useMemo(() => {
+    if (!health) return "Conectando";
+    return health.aiConfigured ? "AI conectada" : "Modo local";
+  }, [health]);
 
   function selectModule(module: ShipModuleId) {
     setActiveModule(module);
@@ -230,6 +233,11 @@ function App() {
     await runMission(mission, false);
   }
 
+  async function runCopilotPrompt(prompt: string) {
+    setActiveModule("copilot");
+    await runMission(prompt, true);
+  }
+
   async function submitCopilot(event: FormEvent) {
     event.preventDefault();
     const mission = copilotInput;
@@ -251,63 +259,70 @@ function App() {
       <div className="universe-stage" aria-hidden="true" />
 
       <header className="topbar">
-        <div className="brand"><div className="mark">S</div><div><strong>BLACKMAMBA</strong><span>SHIPSHELL</span></div></div>
+        <div className="brand" aria-label="BlackMamba ShipShell">
+          <div className="mark">S</div>
+          <div><strong>ShipShell</strong><span>BlackMamba Systems</span></div>
+        </div>
         <form className="radar" onSubmit={submitMission}>
-          <Radio size={16} />
-          <input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Busca o escribe una URL…" aria-label="Radar inteligente" />
-          <button disabled={busy} aria-label="Iniciar misión">{busy ? <Activity className="spin" size={17} /> : <Send size={17} />}</button>
+          <Radio size={16} aria-hidden="true" />
+          <input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Buscar, preguntar o abrir una URL…" aria-label="Comando global" />
+          <button disabled={busy} aria-label="Ejecutar misión">{busy ? <Activity className="spin" size={17} /> : <Send size={17} />}</button>
         </form>
-        <div className="system-status"><span className="pulse" />{status} · {universe.workMode.toUpperCase()}</div>
+        <div className="system-status"><span className="pulse" />{status} · {universe.name}</div>
         <div className="module-status" title={activeModuleMeta.description}><strong>{activeModuleMeta.label}</strong><span>ALT+{activeModuleMeta.shortcut}</span></div>
       </header>
 
-      <aside className="rail">
-        <button className={activeDeck === "browser" ? "active" : ""} onClick={() => { setActiveDeck("browser"); selectModule("browser"); }}><Compass /><span>Puente</span></button>
-        <button className={activeDeck === "marketing" ? "active" : ""} onClick={() => setActiveDeck("marketing")}><Megaphone /><span>Marketing</span></button>
-        <button className={activeDeck === "logbook" ? "active" : ""} onClick={() => { setActiveDeck("logbook"); selectModule("logbook"); }}><BookOpen /><span>Bitácora</span></button>
+      <aside className="rail" aria-label="Navegación principal">
+        <button aria-current={activeDeck === "browser" ? "page" : undefined} className={activeDeck === "browser" ? "active" : ""} onClick={() => { setActiveDeck("browser"); selectModule("browser"); }}><Compass /><span>Navegador</span></button>
+        <button aria-current={activeDeck === "marketing" ? "page" : undefined} className={activeDeck === "marketing" ? "active" : ""} onClick={() => setActiveDeck("marketing")}><Megaphone /><span>Campañas</span></button>
+        <button aria-current={activeDeck === "logbook" ? "page" : undefined} className={activeDeck === "logbook" ? "active" : ""} onClick={() => { setActiveDeck("logbook"); selectModule("logbook"); }}><BookOpen /><span>Bitácora</span></button>
       </aside>
 
       <main className="workspace">
         <section className={`browser-panel selectable-module ${activeModule === "browser" || activeModule === "ports" || activeModule === "logbook" ? "module-selected" : ""}`} data-module={activeDeck === "logbook" ? "logbook" : "browser"} onMouseDown={() => selectModule(activeDeck === "logbook" ? "logbook" : "browser")} onDoubleClick={() => toggleModule(activeDeck === "logbook" ? "logbook" : "browser")}>
           <div className="panel-heading">
-            <div><span className="eyebrow">PUENTE DE MANDO</span><h1>{activeDeck === "browser" ? "Navegación" : activeDeck === "marketing" ? "Cubierta de Marketing" : "Bitácora"}</h1></div>
-            <div className="panel-actions"><button className="module-expand" onClick={(event) => { event.stopPropagation(); toggleModule(activeDeck === "logbook" ? "logbook" : "browser"); }} title="Expandir módulo"><Maximize2 size={13} /></button><div className="secure"><ShieldCheck size={15} /> ShipSeal activo</div></div>
+            <div><span className="eyebrow">Workspace</span><h1>{activeDeck === "browser" ? "Navegador" : activeDeck === "marketing" ? "Campañas" : "Bitácora"}</h1></div>
+            <div className="panel-actions"><button className="module-expand" onClick={(event) => { event.stopPropagation(); toggleModule(activeDeck === "logbook" ? "logbook" : "browser"); }} title="Expandir módulo" aria-label="Expandir módulo"><Maximize2 size={13} /></button><div className="secure"><ShieldCheck size={15} /> ShipSeal protegido</div></div>
           </div>
 
           {activeDeck === "browser" && <>
             <div className={`ports selectable-submodule ${activeModule === "ports" ? "module-selected" : ""}`} data-module="ports" onMouseDown={(event) => { event.stopPropagation(); selectModule("ports"); }} onDoubleClick={(event) => { event.stopPropagation(); toggleModule("ports"); }}>
-              {PORTS.map(([name, href, icon]) => <button key={name} onClick={() => openPort(href)}><span>{icon}</span><div><strong>{name}</strong><small>ABRIR PUERTO</small></div></button>)}
+              {PORTS.map(([name, href, icon]) => <button type="button" key={name} onClick={() => openPort(href)}><span>{icon}</span><div><strong>{name}</strong><small>Abrir</small></div></button>)}
             </div>
             <div className="browser-frame" data-module="browser" onMouseDown={() => selectModule("browser")}>
               {nativeBrowser && browserState.tabs.length > 0 && <div className="tab-strip">
-                {browserState.tabs.map((tab) => <button className={tab.id === browserState.activeTabId ? "active" : ""} key={tab.id} onClick={() => nativeBrowser.selectTab(tab.id)}><span>{tab.loading ? "◌" : "●"}</span><strong>{tab.title}</strong><X size={12} onClick={(event) => { event.stopPropagation(); nativeBrowser.closeTab(tab.id); }} /></button>)}
-                <button className="new-tab" onClick={() => nativeBrowser.newTab("https://www.google.com")}><Plus size={14} /></button>
+                {browserState.tabs.map((tab) => <button className={tab.id === browserState.activeTabId ? "active" : ""} key={tab.id} onClick={() => nativeBrowser.selectTab(tab.id)}><span>{tab.loading ? "◌" : "●"}</span><strong>{tab.title}</strong><X aria-label={`Cerrar ${tab.title}`} size={12} onClick={(event) => { event.stopPropagation(); nativeBrowser.closeTab(tab.id); }} /></button>)}
+                <button className="new-tab" aria-label="Nueva pestaña" onClick={() => nativeBrowser.newTab("https://www.google.com")}><Plus size={14} /></button>
               </div>}
               <div className="browser-toolbar">
-                {nativeBrowser && <><button onClick={() => nativeBrowser.back()} disabled={!activeTab?.canGoBack}><ArrowLeft size={14} /></button><button onClick={() => nativeBrowser.forward()} disabled={!activeTab?.canGoForward}><ArrowRight size={14} /></button><button onClick={() => nativeBrowser.reload()}><RotateCw size={13} /></button></>}
-                <Globe2 size={15} /><span>{activeTab?.url ?? url}</span>{!nativeBrowser && url.startsWith("http") && <a href={url} target="_blank" rel="noreferrer" aria-label="Abrir en navegador"><ExternalLink size={15} /></a>}
+                {nativeBrowser && <>
+                  <button aria-label="Atrás" onClick={() => nativeBrowser.back()} disabled={!activeTab?.canGoBack}><ArrowLeft size={14} /></button>
+                  <button aria-label="Adelante" onClick={() => nativeBrowser.forward()} disabled={!activeTab?.canGoForward}><ArrowRight size={14} /></button>
+                  <button aria-label="Recargar" onClick={() => nativeBrowser.reload()}><RotateCw size={13} /></button>
+                </>}
+                <Globe2 size={15} aria-hidden="true" /><span>{activeTab?.url ?? url}</span>{!nativeBrowser && url.startsWith("http") && <a href={url} target="_blank" rel="noreferrer" aria-label="Abrir en navegador"><ExternalLink size={15} /></a>}
               </div>
               {nativeBrowser && browserState.tabs.length > 0 ? <div className="native-browser-slot" ref={setBrowserSlot} /> : url === "shipshell://home" ? <div className="ship-home">
                 <div className="horizon" />
                 <Anchor />
-                <span>BLACKMAMBA // SHIPSHELL</span>
-                <h2>Tu internet.<br />Tu copiloto al lado.</h2>
-                <p>Abre una página. ShipShell Copilot se queda contigo mientras navegas y usa el contexto sólo cuando tú lo permites.</p>
-                <div><ShieldCheck size={14} /> Navegación bajo ShipSeal</div>
-              </div> : <div className="web-preview"><Globe2 /><h3>La navegación real vive en ShipShell Desktop</h3><p>Ejecuta <code>npm run desktop:dev</code> para abrir páginas completas dentro del navegador propio.</p><a href={url} target="_blank" rel="noreferrer">Abrir temporalmente ↗</a></div>}
+                <span>ShipShell Workspace</span>
+                <h2>Navega. Analiza.<br />Actúa con control.</h2>
+                <p>Un espacio de trabajo para navegar, consultar a tu Copilot y ejecutar acciones con límites claros y evidencia verificable.</p>
+                <div><ShieldCheck size={14} /> Acciones sensibles requieren aprobación</div>
+              </div> : <div className="web-preview"><Globe2 /><h3>Navegación disponible en ShipShell Desktop</h3><p>Ejecuta <code>npm run desktop:dev</code> para abrir páginas completas dentro del navegador integrado.</p><a href={url} target="_blank" rel="noreferrer">Abrir temporalmente ↗</a></div>}
             </div>
           </>}
 
-          {activeDeck === "marketing" && <div className="empty-state"><Megaphone /><h2>Centro de campañas listo</h2><p>Conecta un puerto para traer promociones reales. ShipShell no inventará métricas ni campañas.</p><button onClick={() => setActiveDeck("browser")}>Conectar primer puerto</button></div>}
+          {activeDeck === "marketing" && <div className="empty-state"><Megaphone /><h2>Campañas</h2><p>Conecta un puerto para trabajar con promociones y métricas verificables. ShipShell no completa datos que no existan.</p><button onClick={() => setActiveDeck("browser")}>Conectar un puerto</button></div>}
 
-          {activeDeck === "logbook" && <div className="log-list" data-module="logbook">{entries.length ? entries.map((entry) => <article key={entry.id}><span className={`log-dot ${entry.status}`} /><div><strong>{entry.summary}</strong><small>{entry.event.toUpperCase()} · {new Date(entry.createdAt).toLocaleString()}</small></div></article>) : <div className="empty-state"><BookOpen /><h2>Bitácora limpia</h2><p>Las misiones y maniobras verificables aparecerán aquí.</p></div>}</div>}
+          {activeDeck === "logbook" && <div className="log-list" data-module="logbook">{entries.length ? entries.map((entry) => <article key={entry.id}><span className={`log-dot ${entry.status}`} /><div><strong>{entry.summary}</strong><small>{entry.event} · {new Date(entry.createdAt).toLocaleString()}</small></div></article>) : <div className="empty-state"><BookOpen /><h2>Sin actividad registrada</h2><p>Las misiones y acciones verificables aparecerán aquí.</p></div>}</div>}
         </section>
 
         <aside className={`crew-panel copilot-panel selectable-module ${activeModule === "copilot" ? "module-selected" : ""}`} data-module="copilot" onMouseDown={() => selectModule("copilot")} onDoubleClick={() => toggleModule("copilot")}>
-          <div className="crew-title copilot-title"><Bot /><div><span>COPILOTO</span><strong>ShipShell Copilot</strong></div><button className="module-expand" onClick={(event) => { event.stopPropagation(); toggleModule("copilot"); }} title="Expandir módulo"><Maximize2 size={13} /></button><span className="pulse" /></div>
+          <div className="crew-title copilot-title"><Bot /><div><span>Copilot</span><strong>ShipShell Copilot</strong></div><button className="module-expand" onClick={(event) => { event.stopPropagation(); toggleModule("copilot"); }} title="Expandir Copilot" aria-label="Expandir Copilot"><Maximize2 size={13} /></button><span className="pulse" /></div>
 
           <section className="universe-switcher" aria-label="Universo de ShipShell">
-            <div className="universe-switcher-head"><div><span>UNIVERSO</span><strong>{universe.name}</strong></div><Layers3 size={16} /></div>
+            <div className="universe-switcher-head"><div><span>Universo</span><strong>{universe.name}</strong></div><Layers3 size={16} /></div>
             <select value={universe.id} onChange={(event) => setUniverse(UNIVERSES.find((item) => item.id === event.target.value) ?? universe)} aria-label="Cambiar universo">
               {UNIVERSES.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
@@ -322,30 +337,30 @@ function App() {
           <div className="copilot-context-card">
             <div className="context-source">
               <Globe2 size={16} />
-              <div><span>PÁGINA ACTIVA</span><strong>{activeTab?.title ?? "Sin pestaña activa"}</strong><small>{activeTab?.url ?? "Abre un puerto para navegar"}</small></div>
+              <div><span>Página activa</span><strong>{activeTab?.title ?? "Sin pestaña activa"}</strong><small>{activeTab?.url ?? "Abre un puerto para navegar"}</small></div>
             </div>
-            <button className={`context-toggle ${contextEnabled ? "on" : ""}`} onClick={() => setContextEnabled((enabled) => !enabled)} title="Controlar si el copiloto puede leer una instantánea de la pestaña al preguntar">
+            <button className={`context-toggle ${contextEnabled ? "on" : ""}`} onClick={() => setContextEnabled((enabled) => !enabled)} title="Controlar si el Copilot puede leer una instantánea de la pestaña al preguntar">
               {contextEnabled ? <Eye size={14} /> : <EyeOff size={14} />}
-              Contexto {contextEnabled ? "ON" : "OFF"}
+              Contexto {contextEnabled ? "activo" : "inactivo"}
             </button>
             {pageContext?.selection && <div className="selection-chip">Selección incluida</div>}
             {pageContext?.anchors?.length ? <div className="selection-chip">{pageContext.anchors.length} anclas espaciales</div> : null}
           </div>
 
           <div className="copilot-quick-actions">
-            {QUICK_COPILOT_PROMPTS.map((prompt) => <button key={prompt} disabled={busy || !activeTab || !contextEnabled} onClick={() => runMission(prompt, true)}>{prompt}</button>)}
+            {QUICK_COPILOT_PROMPTS.map((prompt) => <button key={prompt} disabled={busy || !activeTab || !contextEnabled} onClick={() => runCopilotPrompt(prompt)}>{prompt}</button>)}
           </div>
 
-          <div className="message copilot-message"><span>{pageContext?.available ? "CONTEXTO VIVO + RESPUESTA" : "COPILOTO"}</span><p>{answer}</p></div>
+          <div className="message copilot-message"><span>{pageContext?.available ? "Contexto activo" : "Copilot"}</span><p>{answer}</p></div>
 
           <form className="copilot-form" onSubmit={submitCopilot}>
             <Sparkles size={16} />
-            <textarea value={copilotInput} onChange={(event) => setCopilotInput(event.target.value)} placeholder="Pregúntame sobre esta página…" aria-label="Preguntar al copiloto" rows={3} />
-            <button disabled={busy || !copilotInput.trim()} aria-label="Preguntar al copiloto">{busy ? <Activity className="spin" size={16} /> : <Send size={16} />}</button>
+            <textarea value={copilotInput} onChange={(event) => setCopilotInput(event.target.value)} placeholder="Pregúntame sobre esta página…" aria-label="Preguntar al Copilot" rows={3} />
+            <button disabled={busy || !copilotInput.trim()} aria-label="Preguntar al Copilot">{busy ? <Activity className="spin" size={16} /> : <Send size={16} />}</button>
           </form>
 
-          <div className="evidence"><CheckCircle2 /><div><strong>Copiloto, no piloto automático</strong><span>Puede ver, entender, señalar y proponer. Publicar, comprar, borrar, enviar o modificar cuentas sigue requiriendo ShipSeal.</span></div></div>
-          <div className="mission-stats"><div><span>MISIONES</span><strong>{entries.filter((e) => e.event === "mission").length}</strong></div><div><span>BLOQUEOS</span><strong>{entries.filter((e) => e.status === "blocked").length}</strong></div></div>
+          <div className="evidence"><CheckCircle2 /><div><strong>Acciones sensibles protegidas</strong><span>El Copilot puede observar, explicar, señalar y proponer. Publicar, comprar, borrar, enviar o modificar cuentas sigue requiriendo ShipSeal.</span></div></div>
+          <div className="mission-stats"><div><span>Misiones</span><strong>{entries.filter((e) => e.event === "mission").length}</strong></div><div><span>Bloqueos</span><strong>{entries.filter((e) => e.status === "blocked").length}</strong></div></div>
         </aside>
 
         <LiveTerminal
