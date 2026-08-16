@@ -9,6 +9,12 @@ contextBridge.exposeInMainWorld("shipShellBrowser", {
   back: () => ipcRenderer.invoke("browser:back"),
   forward: () => ipcRenderer.invoke("browser:forward"),
   reload: () => ipcRenderer.invoke("browser:reload"),
+  getPageContext: () => ipcRenderer.invoke("browser:get-context", { includeVisual: true }),
+  setAnnotationMode: (mode) => ipcRenderer.invoke("browser:set-annotation-mode", mode),
+  clearAnnotations: () => ipcRenderer.invoke("browser:clear-annotations"),
+  getAnnotations: () => ipcRenderer.invoke("browser:get-annotations"),
+  setAnnotationNote: (number, note) => ipcRenderer.invoke("browser:set-annotation-note", number, note),
+  focusAnnotations: (numbers) => ipcRenderer.invoke("browser:focus-annotations", numbers),
   setBounds: (bounds) => ipcRenderer.send("browser:set-bounds", bounds),
   setVisible: (visible) => ipcRenderer.send("browser:set-visible", visible),
   onState: (listener) => {

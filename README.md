@@ -1,119 +1,165 @@
 # BlackMamba ShipShell
 
-**The intelligent command deck for the open web.**
+**A guarded AI desktop workspace for the open web.**
 
-ShipShell is an AI-first desktop workspace that brings browsing, conversation, terminal work, memory, and guarded execution into one operational interface.
+ShipShell combines a native Chromium browser, a page-aware Copilot, a live terminal, spatial references, persistent evidence, and explicit approval boundaries in one Electron workspace.
 
-> Do not just find the answer. Put it in motion.
+The default experience is intentionally calm and professional. More expressive **Universes** remain optional presentation/work-mode layers; they do not change permissions, facts, or ShipSeal policy.
 
-## Vision
+## What ShipShell does today
 
-```text
-┌──────────────────────────────────────────────┐
-│ Browser                         Crew / Chat  │
-├──────────────────────────────────────────────┤
-│ Integrated terminal                          │
-└──────────────────────────────────────────────┘
-```
+- **Native browsing** — real Electron `WebContentsView` tabs; remote sites are never embedded as privileged iframes.
+- **Persistent Copilot** — can receive a bounded semantic snapshot of the active page when the user enables context.
+- **Automatic browser vision** — low-detail, bounded capture is available when semantic context is not enough.
+- **Spatial Copilot** — underline, circle, or glow page elements; numbered anchors remain explicit references between user and Copilot.
+- **Semantic Context Bus** — publishes the active module, deck, Universe, URL, bounded operational state, and recent evidence. Terminal command/output text requires explicit opt-in.
+- **Live terminal** — streamed stdout/stderr, session-scoped cwd, history, cancellation, realpath workspace containment, and explicit command policy.
+- **ShipSeal** — consequential terminal actions require a single-use, expiring approval bound to the exact command and cwd.
+- **Privacy-aware evidence** — recognized secret shapes are redacted before model-facing terminal context or Logbook persistence; recognized-secret commands are not retained in persistent terminal history.
+- **Logbook** — missions and operational outcomes are retained as evidence instead of being implied from UI state.
+- **Composable modules** — Browser, Ports, Copilot, Terminal, and Logbook expose versioned module contracts and workspace handoff/checkpoint planning.
+- **Universes** — work modes can change density, layout priority, Copilot voice, theme, and atmosphere without weakening safety boundaries.
 
-ShipShell is designed around a simple promise:
+## Default product surface
 
-- search with context instead of collecting links
-- navigate without manually sending screenshots
-- keep the human at the helm
-- preserve decisions and evidence in the Logbook
-- require a ShipSeal before sensitive maneuvers
+New workspaces start in **Professional Graphite**:
 
-## Product language
+- all primary work modules remain available
+- no decorative shader is enabled
+- the visual language stays restrained and desktop-like
+- security state is communicated explicitly instead of through ambient neon
 
-- **Command Deck** — the main workspace
-- **Radar** — intelligent search and research
-- **Ports** — connected sites and services
-- **Missions** — user goals and tasks
-- **Crew** — specialized agents
-- **Maneuvers** — proposed browser or terminal actions
-- **Logbook** — persistent history, context, and evidence
-- **ShipSeal** — explicit approval for sensitive actions
+Optional presets include Focus Minimal, Research Sunset, Build Obsidian, Studio Neon Mamba, Command Deck, and Casual Glass.
 
-## Architecture direction
+## Core interaction loop
 
 ```text
-ShipShell Desktop
-├── browser and tabs
-├── intelligent Radar
-├── persistent chat
-├── integrated terminal
-├── marketing deck
-└── orchestration layer
-    ├── Xarvis-inspired decisions and memory
-    ├── Kodex-inspired guarded execution
-    └── ShipSeal approval gates
+Observe page / workspace
+    ↓
+User chooses what context may be shared
+    ↓
+Copilot receives bounded context / anchors
+    ↓
+Explain or propose
+    ↓
+If action is consequential → ShipSeal approval
+    ↓
+Revalidate boundary and execute narrowly
+    ↓
+Record sanitized outcome / evidence
 ```
 
-Related research and source projects remain independent:
+ShipShell treats page text, screenshots, terminal output, anchor notes, and other external content as **untrusted reference data**. Context can inform a proposal; it cannot grant authority.
 
-- [Kodex](https://github.com/Blackmvmba88/Kodex) — guarded engineering control plane
-- [XarvisCore](https://github.com/Blackmvmba88/XarvisCore) — local-first decision runtime and persistent memory
-- [Neural Browser prototype](https://github.com/Blackmvmba88/aeroacoustic-resonance-engine) — interface and interaction research
+## Architecture
 
-ShipShell will integrate proven concepts without modifying or erasing those repositories.
+```text
+Electron desktop shell
+├── React workspace
+│   ├── Browser / Ports
+│   ├── ShipShell Copilot
+│   ├── Live Terminal
+│   ├── Logbook
+│   ├── Visual Anchor Dock
+│   └── Universe / module runtime
+│
+├── native Chromium WebContentsView tabs
+│   ├── nodeIntegration: false
+│   ├── contextIsolation: true
+│   ├── sandbox: true
+│   └── webSecurity: true
+│
+└── local Express API (127.0.0.1)
+    ├── deterministic mission routing
+    ├── OpenAI Responses API
+    ├── bounded semantic / visual context validation
+    ├── terminal policy + streaming executor
+    ├── ShipSeal approval store
+    ├── shared sensitive-data redaction
+    └── evidence Logbook
+```
 
-## Status
-
-ShipShell now has a runnable desktop MVP with:
-
-1. a native Chromium browser surface with real tabs and configurable Ports
-2. an OpenAI-powered Navigator using the Responses API
-3. a visible terminal restricted to verified read-only maneuvers
-4. a unified URL, question, and fresh-web-search Radar
-5. a persistent local Logbook
-6. ShipSeal permission boundaries for consequential actions
-
-Marketing integrations remain an upcoming milestone. The interface labels missing connections honestly instead of rendering fabricated campaign metrics.
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the detailed boundaries.
 
 ## Quickstart
 
-Requirements: Node.js 20 or newer and an OpenAI API key.
+Requirements: **Node.js 22+**. An OpenAI API key is required only for AI-backed missions.
 
 ```bash
 npm install
 cp .env.example .env.local
-# Add OPENAI_API_KEY to .env.local
+# Add OPENAI_API_KEY to .env.local when needed
 npm run dev
 ```
 
-For the real ShipShell browser, run:
+For the real desktop browser:
 
 ```bash
 npm run desktop:dev
 ```
 
-The regular `npm run dev` web surface is retained for UI development, but external sites are never presented as iframes. Real browsing occurs in isolated Electron `WebContentsView` tabs.
+The normal Vite surface remains useful for UI development and Playwright tests. Full third-party browsing happens in the isolated Electron tabs.
 
-Validate the repository:
+## Validation
+
+Environment and security checks:
+
+```bash
+npm run doctor
+```
+
+Unit tests + TypeScript + production build:
 
 ```bash
 npm run check
 ```
 
-## Runtime boundaries
+Full non-E2E validation, including dependency audit:
 
-- The API binds to `127.0.0.1` by default.
-- API keys never reach the browser UI or terminal child processes.
-- Terminal commands run without a shell and are checked against a read-only allowlist.
-- Absolute paths, parent traversal, shell operators, redirects, and mutations are blocked.
-- Missions and terminal outcomes are written to `.shipshell/logbook.json`, which is ignored by Git.
+```bash
+npm run validate
+```
 
-Read [the architecture](docs/ARCHITECTURE.md), [the security policy](SECURITY.md), and [the contribution guide](CONTRIBUTING.md).
+Behavioral browser tests:
 
-## Principles
+```bash
+npm run test:e2e
+```
 
-1. Local-first where practical.
-2. Preview before mutation.
-3. Evidence before claims.
-4. Human approval before consequential actions.
-5. Portable data and explicit boundaries.
-6. No surprise commits, pushes, publishing, purchases, or deletion.
+Playwright starts its own Vite server. CI installs Chromium and gates pull requests on the full E2E suite, including page-context/anchor behavior and the explicit ShipSeal approval flow.
+
+## Security and trust invariants
+
+1. The browser UI never receives `OPENAI_API_KEY`.
+2. Remote pages cannot invoke the preload bridge used by the command deck.
+3. Remote content, screenshots, notes, anchors, and terminal output are data — never authority.
+4. Page context and terminal command/output sharing have explicit user-controlled boundaries; terminal text is off by default.
+5. Terminal child processes run without shell expansion, with secret/injection variables scrubbed, and inside a realpath-validated workspace boundary.
+6. Commands are classified before execution; blocked commands do not reach the executor.
+7. Consequential terminal actions require an explicit ShipSeal.
+8. A terminal ShipSeal is session-bound, command/cwd-bound, expiring, and single-use.
+9. Recognized secrets are redacted before model-facing terminal context and Logbook persistence; this is defense in depth, not perfect secret detection.
+10. Spatial focus may highlight a page element; highlighting alone never clicks or executes a remote action.
+11. A Universe may change presentation and response voice; it cannot weaken security, permissions, or factual requirements.
+12. Claims of completed work should be backed by runtime output, tests, or sanitized Logbook evidence.
+
+## Product principles
+
+- Calm default, expressive modes by choice.
+- Context without hidden authority.
+- Preview before mutation.
+- Evidence before claims.
+- Explicit approval before consequential actions.
+- Narrow capability boundaries over broad ambient permissions.
+- Workspace continuity without silently changing security contracts.
+
+## Related BlackMamba research
+
+ShipShell reuses proven ideas while keeping the source projects independent:
+
+- [Kodex](https://github.com/Blackmvmba88/Kodex) — guarded engineering control-plane research.
+- [XarvisCore](https://github.com/Blackmvmba88/XarvisCore) — local-first decision and memory research.
+- [Neural Browser prototype](https://github.com/Blackmvmba88/aeroacoustic-resonance-engine) — browser interaction research.
 
 ## License
 

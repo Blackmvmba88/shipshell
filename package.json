@@ -9,9 +9,13 @@
     "build": "tsc --noEmit && vite build",
     "start": "tsx server/index.ts",
     "desktop:dev": "concurrently -k -n api,deck,app -c cyan,magenta,green \"tsx watch server/index.ts\" \"vite\" \"wait-on tcp:8787 http-get://127.0.0.1:5173 && electron .\"",
+    "e2e:server": "vite --host 127.0.0.1 --port 5173",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "check": "npm run test && npm run build"
+    "doctor": "node scripts/doctor.mjs",
+    "audit": "npm audit --audit-level=high",
+    "check": "npm run test && npm run build",
+    "validate": "npm run doctor && npm run check && npm run audit"
   },
   "dependencies": {
     "cors": "^2.8.5",

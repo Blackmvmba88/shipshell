@@ -1,24 +1,119 @@
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { reviewCommand } from "./guard";
+import { resolveTerminalDirectory, resolveWorkspace, reviewCommand, reviewCommandInWorkspace } from "./guard";
 
 describe("reviewCommand", () => {
-  it("permits known read-only commands", () => {
-    expect(reviewCommand("git status").allowed).toBe(true);
-    expect(reviewCommand("ls -la").allowed).toBe(true);
+  it("permits known read commands without a seal", () => {
+    expect(reviewCommand("git status")).toMatchObject({ allowed: true, requiresSeal: false, risk: "read" });
+    expect(reviewCommand("ls -la")).toMatchObject({ allowed: true, requiresSeal: false, risk: "read" });
+    expect(reviewCommand("cat README.md")).toMatchObject({ allowed: true, requiresSeal: false, risk: "read" });
   });
 
-  it("blocks shell operators", () => {
-    expect(reviewCommand("ls; rm -rf ./build")).toMatchObject({ allowed: false, requiresSeal: true });
+  it("keeps session builtins live without filesystem mutation", () => {
+    expect(reviewCommand("cd src")).toMatchObject({ allowed: true, requiresSeal: false, risk: "session", builtin: "cd" });
+    expect(reviewCommand("clear")).toMatchObject({ allowed: true, requiresSeal: false, risk: "session", builtin: "clear" });
   });
 
-  it("blocks mutations by default", () => {
-    expect(reviewCommand("git push")).toMatchObject({ allowed: false, requiresSeal: true });
-    expect(reviewCommand("rm notes.txt").allowed).toBe(false);
+  it("permits local mutations only behind ShipSeal", () => {
+    expect(reviewCommand("git add src/App.tsx")).toMatchObject({ allowed: true, requiresSeal: true, risk: "write" });
+    expect(reviewCommand("git commit -m safe")).toMatchObject({ allowed: true, requiresSeal: true, risk: "write" });
+    expect(reviewCommand("mkdir scratch")).toMatchObject({ allowed: true, requiresSeal: true, risk: "write" });
+    expect(reviewCommand("npm run build")).toMatchObject({ allowed: true, requiresSeal: true, risk: "write" });
   });
 
-  it("keeps file listings inside the workspace", () => {
+  it("marks remote or network-capable maneuvers as external", () => {
+    expect(reviewCommand("git push origin main")).toMatchObject({ allowed: true, requiresSeal: true, risk: "external" });
+    expect(reviewCommand("npm install react")).toMatchObject({ allowed: true, requiresSeal: true, risk: "external" });
+    expect(reviewCommand("npx vite --version")).toMatchObject({ allowed: true, requiresSeal: true, risk: "external" });
+  });
+
+  it("blocks shell escapes and privileged executables", () => {
+    expect(reviewCommand("ls; rm -rf .")).toMatchObject({ allowed: false, risk: "blocked" });
+    expect(reviewCommand("sudo rm notes.txt")).toMatchObject({ allowed: false, risk: "blocked" });
+    expect(reviewCommand("bash -c echo-hi")).toMatchObject({ allowed: false, risk: "blocked" });
+  });
+
+  it("keeps file operations inside the workspace lexically", () => {
     expect(reviewCommand("ls /Users").allowed).toBe(false);
-    expect(reviewCommand("ls ../../").allowed).toBe(false);
-    expect(reviewCommand("ls src").allowed).toBe(true);
+    expect(reviewCommand("rm ../../notes.txt").allowed).toBe(false);
+    expect(reviewCommand("touch src/new-file.ts")).toMatchObject({ allowed: true, requiresSeal: true });
+  });
+
+  it("blocks read-tool options that can load external files or preprocessors", () => {
+    expect(reviewCommand("grep --file=/etc/passwd needle .")).toMatchObject({ allowed: false, risk: "blocked" });
+    expect(reviewCommand("grep -f patterns.txt needle .")).toMatchObject({ allowed: false, risk: "blocked" });
+    expect(reviewCommand("rg --pre cat needle .")).toMatchObject({ allowed: false, risk: "blocked" });
+    expect(reviewCommand("rg --ignore-file=../outside.ignore needle .")).toMatchObject({ allowed: false, risk: "blocked" });
+  });
+
+  it("blocks Git configuration and unregistered capability expansion", () => {
+    expect(reviewCommand("git -c alias.x=!sh x")).toMatchObject({ allowed: false, risk: "blocked" });
+    expect(reviewCommand("git config alias.shipshell !sh")).toMatchObject({ allowed: false, risk: "blocked" });
+    expect(reviewCommand("git worktree add ../outside")).toMatchObject({ allowed: false, risk: "blocked" });
+    expect(reviewCommand("git maintenance run")).toMatchObject({ allowed: false, risk: "blocked" });
+  });
+
+  it("keeps Git network commands sealed while blocking filesystem escapes", () => {
+    expect(reviewCommand("git clone https://example.com/repo.git vendor/repo")).toMatchObject({ allowed: true, requiresSeal: true, risk: "external" });
+    expect(reviewCommand("git clone https://example.com/repo.git ../outside")).toMatchObject({ allowed: false, risk: "blocked" });
+    expect(reviewCommand("git diff -- ../outside")).toMatchObject({ allowed: false, risk: "blocked" });
+  });
+});
+
+describe("real workspace boundary", () => {
+  it("blocks reads, writes, and cd through symlinks that resolve outside the workspace", () => {
+    const temp = mkdtempSync(path.join(tmpdir(), "shipshell-guard-"));
+    try {
+      const workspaceDir = path.join(temp, "workspace");
+      const outsideDir = path.join(temp, "outside");
+      mkdirSync(workspaceDir);
+      mkdirSync(outsideDir);
+      writeFileSync(path.join(workspaceDir, "inside.txt"), "inside");
+      writeFileSync(path.join(outsideDir, "secret.txt"), "outside");
+      symlinkSync(outsideDir, path.join(workspaceDir, "escape"), "dir");
+
+      const workspace = resolveWorkspace(workspaceDir);
+      expect(reviewCommandInWorkspace("cat inside.txt", workspace, workspace)).toMatchObject({ allowed: true, risk: "read" });
+      expect(reviewCommandInWorkspace("cat escape/secret.txt", workspace, workspace)).toMatchObject({ allowed: false, risk: "blocked" });
+      expect(reviewCommandInWorkspace("touch escape/new.txt", workspace, workspace)).toMatchObject({ allowed: false, risk: "blocked" });
+      expect(resolveTerminalDirectory(workspace, workspace, "escape")).toBeNull();
+    } finally {
+      rmSync(temp, { recursive: true, force: true });
+    }
+  });
+
+  it("allows new files only when their nearest existing ancestor resolves inside the workspace", () => {
+    const temp = mkdtempSync(path.join(tmpdir(), "shipshell-guard-"));
+    try {
+      const workspaceDir = path.join(temp, "workspace");
+      mkdirSync(workspaceDir);
+      mkdirSync(path.join(workspaceDir, "src"));
+      const workspace = resolveWorkspace(workspaceDir);
+
+      expect(reviewCommandInWorkspace("touch src/new-file.ts", workspace, workspace)).toMatchObject({ allowed: true, requiresSeal: true, risk: "write" });
+    } finally {
+      rmSync(temp, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("resolveTerminalDirectory", () => {
+  it("allows navigation inside the workspace and blocks escaping it", () => {
+    const temp = mkdtempSync(path.join(tmpdir(), "shipshell-cwd-"));
+    try {
+      const workspaceDir = path.join(temp, "project");
+      mkdirSync(workspaceDir);
+      mkdirSync(path.join(workspaceDir, "src"));
+      const workspace = resolveWorkspace(workspaceDir);
+      const src = path.join(workspace, "src");
+
+      expect(resolveTerminalDirectory(workspace, workspace, "src")).toBe(src);
+      expect(resolveTerminalDirectory(workspace, src, "..")).toBe(workspace);
+      expect(resolveTerminalDirectory(workspace, workspace, "../outside")).toBeNull();
+    } finally {
+      rmSync(temp, { recursive: true, force: true });
+    }
   });
 });

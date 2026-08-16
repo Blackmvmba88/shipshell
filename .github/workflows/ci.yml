@@ -2,24 +2,24 @@ name: CI
 
 on:
   push:
-    branches: [main, "ci/**"]
+    branches: [main, "ci/**", "agent/**"]
   pull_request:
-    branches: [main]
+    branches: [main, "agent/**"]
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -27,5 +27,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Test and build
-        run: npm run check
+      - name: Doctor, test, build, and audit
+        run: npm run validate
+
+      - name: Install Chromium for E2E
+        run: npx playwright install --with-deps chromium
+
+      - name: Playwright E2E
+        run: npm run test:e2e
