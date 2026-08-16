@@ -19,8 +19,8 @@ export function redactTerminalContextText(value: string | undefined): string | u
   return value
     .replace(PRIVATE_KEY_BLOCK, "[REDACTED PRIVATE KEY]")
     .replace(CREDENTIAL_URL, `$1${REDACTION}:${REDACTION}@`)
-    .replace(SECRET_ASSIGNMENT, (_match, name: string, separator: string) => `${name}${separator}${REDACTION}`)
     .replace(BEARER_TOKEN, `Bearer ${REDACTION}`)
+    .replace(SECRET_ASSIGNMENT, (_match, name: string, separator: string) => `${name}${separator}${REDACTION}`)
     .replace(OPENAI_KEY, REDACTION)
     .replace(GITHUB_TOKEN, REDACTION)
     .replace(NPM_TOKEN, REDACTION)
