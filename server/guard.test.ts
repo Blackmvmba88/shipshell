@@ -15,6 +15,7 @@ describe("reviewCommand", () => {
 
   it("permits local mutations only behind ShipSeal", () => {
     expect(reviewCommand("git add src/App.tsx")).toMatchObject({ allowed: true, requiresSeal: true, risk: "write" });
+    expect(reviewCommand("git commit -m safe")).toMatchObject({ allowed: true, requiresSeal: true, risk: "write" });
     expect(reviewCommand("mkdir scratch")).toMatchObject({ allowed: true, requiresSeal: true, risk: "write" });
     expect(reviewCommand("npm run build")).toMatchObject({ allowed: true, requiresSeal: true, risk: "write" });
   });
@@ -35,6 +36,26 @@ describe("reviewCommand", () => {
     expect(reviewCommand("ls /Users").allowed).toBe(false);
     expect(reviewCommand("rm ../../notes.txt").allowed).toBe(false);
     expect(reviewCommand("touch src/new-file.ts")).toMatchObject({ allowed: true, requiresSeal: true });
+  });
+
+  it("blocks read-tool options that can load external files or preprocessors", () => {
+    expect(reviewCommand("grep --file=/etc/passwd needle .")).toMatchObject({ allowed: false, risk: "blocked" });
+    expect(reviewCommand("grep -f patterns.txt needle .")).toMatchObject({ allowed: false, risk: "blocked" });
+    expect(reviewCommand("rg --pre cat needle .")).toMatchObject({ allowed: false, risk: "blocked" });
+    expect(reviewCommand("rg --ignore-file=../outside.ignore needle .")).toMatchObject({ allowed: false, risk: "blocked" });
+  });
+
+  it("blocks Git configuration and unregistered capability expansion", () => {
+    expect(reviewCommand("git -c alias.x=!sh x")).toMatchObject({ allowed: false, risk: "blocked" });
+    expect(reviewCommand("git config alias.shipshell !sh")).toMatchObject({ allowed: false, risk: "blocked" });
+    expect(reviewCommand("git worktree add ../outside")).toMatchObject({ allowed: false, risk: "blocked" });
+    expect(reviewCommand("git maintenance run")).toMatchObject({ allowed: false, risk: "blocked" });
+  });
+
+  it("keeps Git network commands sealed while blocking filesystem escapes", () => {
+    expect(reviewCommand("git clone https://example.com/repo.git vendor/repo")).toMatchObject({ allowed: true, requiresSeal: true, risk: "external" });
+    expect(reviewCommand("git clone https://example.com/repo.git ../outside")).toMatchObject({ allowed: false, risk: "blocked" });
+    expect(reviewCommand("git diff -- ../outside")).toMatchObject({ allowed: false, risk: "blocked" });
   });
 });
 
