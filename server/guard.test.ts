@@ -1,5 +1,8 @@
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { resolveTerminalDirectory, reviewCommand } from "./guard";
+import { resolveTerminalDirectory, resolveWorkspace, reviewCommand, reviewCommandInWorkspace } from "./guard";
 
 describe("reviewCommand", () => {
   it("permits known read commands without a seal", () => {
@@ -32,7 +35,7 @@ describe("reviewCommand", () => {
     expect(reviewCommand("bash -c echo-hi")).toMatchObject({ allowed: false, risk: "blocked" });
   });
 
-  it("keeps file operations inside the workspace", () => {
+  it("keeps file operations inside the workspace lexically", () => {
     expect(reviewCommand("ls /Users").allowed).toBe(false);
     expect(reviewCommand("rm ../../notes.txt").allowed).toBe(false);
     expect(reviewCommand("touch src/new-file.ts")).toMatchObject({ allowed: true, requiresSeal: true });
@@ -59,11 +62,58 @@ describe("reviewCommand", () => {
   });
 });
 
+describe("real workspace boundary", () => {
+  it("blocks reads, writes, and cd through symlinks that resolve outside the workspace", () => {
+    const temp = mkdtempSync(path.join(tmpdir(), "shipshell-guard-"));
+    try {
+      const workspaceDir = path.join(temp, "workspace");
+      const outsideDir = path.join(temp, "outside");
+      mkdirSync(workspaceDir);
+      mkdirSync(outsideDir);
+      writeFileSync(path.join(workspaceDir, "inside.txt"), "inside");
+      writeFileSync(path.join(outsideDir, "secret.txt"), "outside");
+      symlinkSync(outsideDir, path.join(workspaceDir, "escape"), "dir");
+
+      const workspace = resolveWorkspace(workspaceDir);
+      expect(reviewCommandInWorkspace("cat inside.txt", workspace, workspace)).toMatchObject({ allowed: true, risk: "read" });
+      expect(reviewCommandInWorkspace("cat escape/secret.txt", workspace, workspace)).toMatchObject({ allowed: false, risk: "blocked" });
+      expect(reviewCommandInWorkspace("touch escape/new.txt", workspace, workspace)).toMatchObject({ allowed: false, risk: "blocked" });
+      expect(resolveTerminalDirectory(workspace, workspace, "escape")).toBeNull();
+    } finally {
+      rmSync(temp, { recursive: true, force: true });
+    }
+  });
+
+  it("allows new files only when their nearest existing ancestor resolves inside the workspace", () => {
+    const temp = mkdtempSync(path.join(tmpdir(), "shipshell-guard-"));
+    try {
+      const workspaceDir = path.join(temp, "workspace");
+      mkdirSync(workspaceDir);
+      mkdirSync(path.join(workspaceDir, "src"));
+      const workspace = resolveWorkspace(workspaceDir);
+
+      expect(reviewCommandInWorkspace("touch src/new-file.ts", workspace, workspace)).toMatchObject({ allowed: true, requiresSeal: true, risk: "write" });
+    } finally {
+      rmSync(temp, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("resolveTerminalDirectory", () => {
   it("allows navigation inside the workspace and blocks escaping it", () => {
-    const workspace = "/workspace/project";
-    expect(resolveTerminalDirectory(workspace, workspace, "src")).toBe("/workspace/project/src");
-    expect(resolveTerminalDirectory(workspace, "/workspace/project/src", "..")).toBe(workspace);
-    expect(resolveTerminalDirectory(workspace, workspace, "../outside")).toBeNull();
+    const temp = mkdtempSync(path.join(tmpdir(), "shipshell-cwd-"));
+    try {
+      const workspaceDir = path.join(temp, "project");
+      mkdirSync(workspaceDir);
+      mkdirSync(path.join(workspaceDir, "src"));
+      const workspace = resolveWorkspace(workspaceDir);
+      const src = path.join(workspace, "src");
+
+      expect(resolveTerminalDirectory(workspace, workspace, "src")).toBe(src);
+      expect(resolveTerminalDirectory(workspace, src, "..")).toBe(workspace);
+      expect(resolveTerminalDirectory(workspace, workspace, "../outside")).toBeNull();
+    } finally {
+      rmSync(temp, { recursive: true, force: true });
+    }
   });
 });
